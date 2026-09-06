@@ -64,9 +64,9 @@ class Config:
     gemini_api_key: Optional[str] = os.getenv("GEMINI_API_KEY", None)
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-    # Notification Recipients
-    target_email: str = os.getenv("NOTIFICATION_TARGET_EMAIL", "user@example.com")
-    target_phone: str = os.getenv("NOTIFICATION_TARGET_PHONE", "555-019-2834")
+    # Notification Recipients (Configured via .env or environment variables; never hardcoded)
+    target_email: Optional[str] = field(default_factory=lambda: os.getenv("NOTIFICATION_TARGET_EMAIL", None))
+    target_phone: Optional[str] = field(default_factory=lambda: os.getenv("NOTIFICATION_TARGET_PHONE", None))
     notification_interval_minutes: int = int(os.getenv("NOTIFICATION_INTERVAL_MINUTES", "60"))
 
     # Email Dispatcher

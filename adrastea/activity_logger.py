@@ -6,16 +6,17 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from .config import config
+from .sanitizer import sanitize_text
 
 logger = logging.getLogger("Adrastea.ActivityLogger")
 
 
 class ActivityLogger:
-    """Maintains ACTIVITY_LOG.md in the repo and periodically commits it to GitHub."""
+    """Maintains ACTIVITY_LOG.md locally and commits to GitHub only upon significant happenings."""
 
     def __init__(self, log_path: Optional[Path] = None):
         self.log_path = log_path or (config.root_dir / "ACTIVITY_LOG.md")
-        self.last_commit_time = 0.0
+        self.last_push_time = 0.0
         self._ensure_file_exists()
 
     def _ensure_file_exists(self) -> None:
@@ -33,10 +34,10 @@ class ActivityLogger:
         self,
         alpha_status: Dict[str, Any],
         beta_action: str,
-        outreach_results: Dict[str, Any],
-        pending_directive_prompt: str
+        outreach_results: Optional[Dict[str, Any]] = None,
+        pending_directive_prompt: Optional[str] = None
     ) -> None:
-        """Append a structured cycle entry to ACTIVITY_LOG.md."""
+        """Append a structured cycle entry to the local ACTIVITY_LOG.md."""
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         uptime = alpha_status.get("uptime_seconds", 0)
         telemetry = alpha_status.get("telemetry", {})
@@ -45,44 +46,64 @@ class ActivityLogger:
         total_fail = telemetry.get("total_failures", 0)
         active_tasks = alpha_status.get("active_tasks", [])
 
-        # Format outreach summary
-        contact_summary = []
-        for channel, res in outreach_results.items():
-            status_str = "OK" if res.get("success") else "FAILED"
-            contact_summary.append(f"- **{channel}**: {status_str} ({res.get('details', '')})")
-        contact_block = "\n".join(contact_summary) if contact_summary else "- No outreach triggered this cycle."
+        contact_block = ""
+        if outreach_results:
+            contact_summary = []
+            for channel, res in outreach_results.items():
+                status_str = "OK" if res.get("success") else "FAILED"
+                contact_summary.append(f"- **{channel}**: {status_str} ({res.get('details', '')})")
+            contact_block = "- **Outreach Attempts**:\n" + "\n".join(contact_summary) + "\n"
+
+        prompt_block = f"- **Direction Prompt for Luke**:\n> {pending_directive_prompt}\n" if pending_directive_prompt else ""
 
         entry = (
-            f"### [{now}] Autonomous Cycle Report\n\n"
+            f"### [{now}] Significant Event / Cycle Update\n\n"
             f"- **System State**: Alpha Uptime: {uptime}s | Active Tasks: {len(active_tasks)}\n"
             f"- **Execution Metrics**: {total_succ} Successes, {total_fail} Failures (Total: {total_exec})\n"
-            f"- **Beta Cognitive Action**: {beta_action}\n"
-            f"- **Outreach Attempts**:\n{contact_block}\n"
-            f"- **Direction Prompt for Luke**:\n> {pending_directive_prompt}\n\n"
+            f"- **Beta Action / Event**: {beta_action}\n"
+            f"{contact_block}"
+            f"{prompt_block}\n"
             f"---\n\n"
         )
+
+        entry = sanitize_text(entry)
 
         try:
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(entry)
-            logger.info(f"Recorded cycle update in {self.log_path.name}")
+            logger.info(f"Recorded local activity entry: '{beta_action}'")
         except Exception as e:
             logger.error(f"Failed writing to activity log: {e}")
 
-    def commit_and_push(self, force: bool = False, min_interval_seconds: float = 600.0) -> bool:
-        """Commit ACTIVITY_LOG.md and push to GitHub repository."""
+    def commit_and_push_significant_event(
+        self,
+        event_description: str,
+        min_cooldown_seconds: float = 1800.0,
+        bypass_cooldown: bool = False
+    ) -> bool:
+        """Commit ACTIVITY_LOG.md and push to GitHub ONLY for significant happenings.
+        
+        Pushes are event-driven (e.g. user directive adopted, stuck task triaged, major milestone)
+        and throttled by cooldown to prevent relentless pushing.
+        """
         now = time.time()
-        if not force and (now - self.last_commit_time) < min_interval_seconds:
+        time_since_last = now - self.last_push_time
+
+        if not bypass_cooldown and time_since_last < min_cooldown_seconds:
+            logger.info(
+                f"Skipping Git push for '{event_description}' (Cooldown active: "
+                f"{int(time_since_last)}s < {int(min_cooldown_seconds)}s)."
+            )
             return False
 
-        logger.info("Committing and pushing updated ACTIVITY_LOG.md to GitHub...")
+        logger.info(f"Pushing significant happening to GitHub: '{event_description}'...")
         try:
-            # Stage only ACTIVITY_LOG.md to prevent any accidental leakage
+            # Stage only ACTIVITY_LOG.md to guarantee no leakage of untracked files
             subprocess.run(["git", "add", str(self.log_path)], cwd=str(config.root_dir), check=True, capture_output=True)
-            
+
             timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            commit_msg = f"docs(activity): autonomous update [{timestamp_str}]"
-            
+            commit_msg = f"docs(activity): {event_description} [{timestamp_str}]"
+
             commit_res = subprocess.run(
                 ["git", "commit", "-m", commit_msg],
                 cwd=str(config.root_dir),
@@ -90,18 +111,18 @@ class ActivityLogger:
                 text=True
             )
             if "nothing to commit" in commit_res.stdout or "nothing to commit" in commit_res.stderr:
-                logger.info("No activity log changes to commit.")
+                logger.info("No activity changes to commit.")
                 return False
 
-            push_res = subprocess.run(
+            subprocess.run(
                 ["git", "push", "origin", "main"],
                 cwd=str(config.root_dir),
                 capture_output=True,
                 text=True,
                 check=True
             )
-            self.last_commit_time = now
-            logger.info(f"Successfully pushed activity log to GitHub: {commit_msg}")
+            self.last_push_time = now
+            logger.info(f"Pushed significant event to GitHub: {commit_msg}")
             return True
         except Exception as e:
             logger.error(f"Failed to commit and push activity log: {e}")

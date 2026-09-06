@@ -57,7 +57,7 @@ class DeliveryStrategist:
         logger.warning(f"Beta analyzing {len(failures)} outreach failures: {list(failures.keys())}")
 
         prompt = (
-            f"Adrastea attempted to contact Luke Holman (user@example.com, 555-019-2834).\n"
+            f"Adrastea attempted to contact user via configured notification channels.\n"
             f"Results:\n"
             f"Successes: {list(successes.keys())}\n"
             f"Failures: {failures}\n\n"

@@ -10,16 +10,22 @@ from .notifications.notifier import Notifier
 from .alpha.local_llm import LocalLLMClient
 from .beta.llm_consultant import LLMConsultant
 
+from .sanitizer import SensitiveDataFilter, mask_sensitive_value
+
 
 def setup_logging(verbose: bool = False):
     level = logging.DEBUG if verbose else logging.INFO
+    sensitive_filter = SensitiveDataFilter()
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.addFilter(sensitive_filter)
+
+    file_handler = logging.FileHandler(config.logs_dir / "adrastea.log", encoding="utf-8")
+    file_handler.addFilter(sensitive_filter)
+
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(config.logs_dir / "adrastea.log", encoding="utf-8")
-        ]
+        handlers=[console_handler, file_handler]
     )
 
 
@@ -97,8 +103,8 @@ def main():
     elif args.command == "test-llm":
         cmd_test_llm()
     elif args.command == "status":
-        print(f"Target Email: {config.target_email}")
-        print(f"Target Phone: {config.target_phone}")
+        print(f"Target Email: {mask_sensitive_value(config.target_email)}")
+        print(f"Target Phone: {mask_sensitive_value(config.target_phone)}")
         print(f"Ollama URL: {config.ollama_base_url}")
         print(f"IPC: {config.ipc_host}:{config.ipc_port}")
 

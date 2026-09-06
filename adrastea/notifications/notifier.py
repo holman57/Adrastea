@@ -77,7 +77,7 @@ class Notifier:
                 </div>
 
                 <p style="font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 10px;">
-                    Generated autonomously by Adrastea Orchestrator. Target: {config.target_email} & {config.target_phone}.
+                    Generated autonomously by Adrastea Orchestrator. Target configured via environment variables.
                 </p>
             </div>
         </body>

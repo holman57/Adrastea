@@ -22,7 +22,7 @@ class TestNotifications(unittest.TestCase):
 
         self.assertIn("Adrastea", subject)
         self.assertIn("Alpha Uptime: 120", plain_text)
-        self.assertIn("user@example.com", html_text)
+        self.assertIn("Adrastea Orchestrator", html_text)
         self.assertIn("What should Adrastea do next?", plain_text)
 
     def test_phone_number_cleaning(self):

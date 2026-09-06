@@ -8,10 +8,10 @@ This log records autonomous operational cycles, task executions, RL Q-scores, ou
 
 - **System State**: Alpha & Beta Engines Initialized. Local LLM (Ollama `qwen3-coder:30b`) Online.
 - **Outreach Channels Active**:
-  - **GitHub Verified Email Relay**: Active on Issue #1. Official emails delivered directly to `user@example.com` via GitHub SPF/DKIM verified mail servers.
+  - **GitHub Verified Email Relay**: Active on Issue #1. Relay notifications delivered via GitHub verified mail servers.
   - **Desktop Audio Synthesizer**: Active (`System.Speech.Synthesis`). Voice announcements dispatched through system speakers.
   - **Desktop System Tray Balloon**: Active (`System.Windows.Forms.NotifyIcon`).
-  - **Direct Email & SMS**: Configured for `user@example.com` and `555-019-2834` (with SMTP relay authentication fallback).
+  - **Direct Email & SMS**: Configured via environment variables (.env with SMTP relay authentication fallback).
 - **Directives Channel**: Watching `DIRECTIVES.txt` and GitHub Issue #1 comments.
 - **Direction Prompt for Luke**:
   > Adrastea is running stably in its operational loop. What would you like Adrastea to prioritize next?
@@ -24,7 +24,7 @@ This log records autonomous operational cycles, task executions, RL Q-scores, ou
 - **Execution Metrics**: 0 Successes, 0 Failures (Total: 0)
 - **Beta Cognitive Action**: Outreach Attempt #1 (desktop_balloon)
 - **Outreach Attempts**:
-- **github_verified_email**: OK (Delivered via GitHub Issue #1 (https://github.com/holman57/Adrastea/issues/1#issuecomment-5557654511))
+- **github_verified_email**: OK (Delivered via GitHub Issue #1)
 - **desktop_voice**: OK (Spoken through Windows audio synthesis)
 - **desktop_balloon**: OK (Popped system tray notification)
 - **direct_email**: FAILED (Gmail requires SMTP authentication (SPF/DKIM). Please add SMTP_USER and SMTP_PASSWORD (a Gmail App Password) to .env to deliver directly to Inbox.)

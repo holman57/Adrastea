@@ -54,7 +54,7 @@ class ContactRelay:
             return False
 
     def send_github_email_relay(self, issue_number: int, body_markdown: str) -> Dict[str, Any]:
-        """Posts update to GitHub Issue #1, triggering official email to user@example.com and phone push."""
+        """Posts update to GitHub Issue, triggering email and notification relay."""
         try:
             res = subprocess.run(
                 ["gh", "issue", "comment", str(issue_number), "--repo", "holman57/Adrastea", "--body", body_markdown],
@@ -102,7 +102,7 @@ class ContactRelay:
         results["direct_email"] = {"success": email_sent, "details": email_details}
 
         # Channel 5: SMS / Carrier Gateway Attempt
-        sms_body = f"Adrastea Alert: System waiting on your direction. Check user@example.com or reply."
+        sms_body = "Adrastea Alert: System waiting on your direction. Check notifications or reply."
         sms_sent, sms_details = self.sms_svc.send_sms(sms_body)
         results["sms_carrier"] = {"success": sms_sent, "details": sms_details}
 

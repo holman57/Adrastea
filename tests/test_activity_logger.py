@@ -1,4 +1,5 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from adrastea.activity_logger import ActivityLogger
@@ -31,6 +32,20 @@ class TestActivityLogger(unittest.TestCase):
             self.assertIn("Test Action", content)
             self.assertIn("- **github_verified_email**: OK", content)
             self.assertIn("What next?", content)
+
+    def test_cooldown_suppression(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = Path(tmpdir) / "TEST_ACTIVITY.md"
+            logger = ActivityLogger(log_path=log_file)
+            logger.last_push_time = time.time()  # just pushed
+
+            # Without bypass, cooldown should suppress push
+            pushed = logger.commit_and_push_significant_event(
+                "minor event",
+                min_cooldown_seconds=1800.0,
+                bypass_cooldown=False
+            )
+            self.assertFalse(pushed)
 
 
 if __name__ == "__main__":

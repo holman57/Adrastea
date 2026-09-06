@@ -52,11 +52,22 @@ class BetaEngine:
 
     async def _on_stuck(self, msg: Message) -> None:
         """Immediate high-priority triage when Alpha is stuck."""
-        logger.warning(f"ALPHA STUCK SIGNAL DETECTED: {msg.payload}")
+        task_id = msg.payload.get("task_id", "unknown")
+        logger.warning(f"ALPHA STUCK SIGNAL DETECTED for [{task_id}]")
         signals = self.triage.analyze_stuck_state(msg.payload)
         for sig in signals:
             logger.info(f"Beta dispatching corrective signal {sig.signal} to Alpha...")
             await self.ipc.send(sig)
+
+        # Significant happening: Triage intervention!
+        self.activity_logger.log_cycle(
+            alpha_status=self.last_telemetry,
+            beta_action=f"Autonomous Triage Intervention for stuck task [{task_id}]"
+        )
+        self.activity_logger.commit_and_push_significant_event(
+            f"triaged and resolved stuck task [{task_id}]",
+            min_cooldown_seconds=1800.0
+        )
 
     async def _on_task_failed(self, msg: Message) -> None:
         logger.info(f"Task failed notification: {msg.payload.get('task_id')}")
@@ -87,7 +98,8 @@ class BetaEngine:
                 if directive:
                     logger.info(f"Directives received from Luke: '{directive}'")
                     self.strategist.reset_backoff_on_response()
-                    # Enqueue high-priority task in Alpha
+
+                    # Significant happening: User directive received!
                     safe_dir = directive.replace("'", "\\'")
                     cmd = f'python -c "print(\'Executed user directive: {safe_dir}\')"'
                     await self.ipc.send(
@@ -103,6 +115,16 @@ class BetaEngine:
                         )
                     )
 
+                    # Log locally and push significant event to GitHub immediately
+                    self.activity_logger.log_cycle(
+                        alpha_status=self.last_telemetry,
+                        beta_action=f"Adopted and executed user directive: '{directive}'"
+                    )
+                    self.activity_logger.commit_and_push_significant_event(
+                        f"adopted user directive '{directive[:40]}'",
+                        bypass_cooldown=True
+                    )
+
                 # 2. Heuristic Pathfinding Tuning
                 if self.last_telemetry:
                     tune_msg = self.tuner.evaluate_telemetry(self.last_telemetry.get("telemetry", {}))
@@ -110,7 +132,7 @@ class BetaEngine:
                         logger.info("Beta tuning Alpha's RL pathfinding weights...")
                         await self.ipc.send(tune_msg)
 
-                # 3. Outreach & Inquiries with Adaptive Backoff
+                # 3. Outreach & Inquiries with Adaptive Backoff (Logs locally without pushing to GitHub)
                 if self.strategist.should_attempt_contact():
                     logger.info(f"Triggering outreach dispatch (Attempt #{self.strategist.contact_attempt_count + 1})...")
                     question = self.discovery.formulate_user_question(self.last_telemetry)
@@ -122,15 +144,13 @@ class BetaEngine:
                     adaptation = self.strategist.analyze_and_adapt(channels)
                     logger.info(f"Delivery diagnosis: {adaptation.get('barrier_summary')}")
 
-                    # Record cycle in ACTIVITY_LOG.md
+                    # Record cycle locally in ACTIVITY_LOG.md (DO NOT PUSH - avoid relentless pounding)
                     self.activity_logger.log_cycle(
                         alpha_status=self.last_telemetry,
                         beta_action=f"Outreach Attempt #{self.strategist.contact_attempt_count} ({adaptation.get('best_working_channel', 'none')})",
                         outreach_results=channels,
                         pending_directive_prompt=question
                     )
-                    # Commit and push ACTIVITY_LOG.md to GitHub
-                    self.activity_logger.commit_and_push(min_interval_seconds=300.0)
 
                 # 4. Periodic Discovery of novel diagnostic tasks
                 if iteration % 6 == 0:
