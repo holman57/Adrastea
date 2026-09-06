@@ -1,0 +1,13 @@
+# ==============================================================================
+# ADRASTEA USER DIRECTIVES
+# ==============================================================================
+# Luke (@holman57):
+# Type your instructions, tasks, or goals for Adrastea below and save this file.
+# Adrastea automatically detects directives, adopts them into Alpha's scheduler,
+# executes them, and logs the results to ACTIVITY_LOG.md and GitHub.
+#
+# Examples:
+# - Run full codebase diagnostic suite
+# - Benchmark Ollama qwen3-coder:30b throughput
+# - Test alternative SMS carrier endpoints
+# ==============================================================================

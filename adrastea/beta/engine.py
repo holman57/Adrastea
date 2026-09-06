@@ -4,10 +4,13 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
+from ..activity_logger import ActivityLogger
 from ..config import config
+from ..directives import DirectiveWatcher
 from ..ipc.channel import IPCClient
 from ..ipc.protocol import Message, SignalType
 from ..notifications.notifier import Notifier
+from .delivery_strategist import DeliveryStrategist
 from .discovery import GoalDiscovery
 from .llm_consultant import LLMConsultant
 from .mcp_client import MCPClient
@@ -28,11 +31,13 @@ class BetaEngine:
         self.tuner = HeuristicTuner()
         self.discovery = GoalDiscovery(llm=self.llm)
         self.notifier = Notifier()
+        self.strategist = DeliveryStrategist()
+        self.watcher = DirectiveWatcher()
+        self.activity_logger = ActivityLogger()
 
         self._running = False
         self._loop_task: Optional[asyncio.Task] = None
         self.last_telemetry: Dict[str, Any] = {}
-        self.last_notification_time = 0.0
 
         self._setup_ipc_handlers()
 
@@ -70,40 +75,71 @@ class BetaEngine:
         self._loop_task = asyncio.create_task(self._cognitive_loop())
 
     async def _cognitive_loop(self) -> None:
-        """Main loop: Cycles through Idle/Wait, Optimize, and Discover modes."""
+        """Main loop: Cycles through Idle/Wait, Directive Checking, Outreach with Backoff, and Optimization."""
         iteration = 0
         while self._running:
             try:
                 iteration += 1
-                logger.info(f"System Beta cognitive cycle #{iteration} (Idle/Wait mode)")
+                logger.info(f"System Beta cognitive cycle #{iteration} (Observing & Idle)")
 
-                # Mode 1: Optimize Alpha's Workflow & Pathfinding Weights
+                # 1. Check for user directives from Luke (DIRECTIVES.txt or GitHub Issue comments)
+                directive = self.watcher.check_directives()
+                if directive:
+                    logger.info(f"Directives received from Luke: '{directive}'")
+                    self.strategist.reset_backoff_on_response()
+                    # Enqueue high-priority task in Alpha
+                    safe_dir = directive.replace("'", "\\'")
+                    cmd = f'python -c "print(\'Executed user directive: {safe_dir}\')"'
+                    await self.ipc.send(
+                        Message(
+                            signal=SignalType.SIG_DISPATCH,
+                            sender="Beta",
+                            payload={
+                                "task_id": f"user_directive_{int(time.time())}",
+                                "command": cmd,
+                                "priority": 100,
+                                "metadata": {"user_directive": directive}
+                            }
+                        )
+                    )
+
+                # 2. Heuristic Pathfinding Tuning
                 if self.last_telemetry:
                     tune_msg = self.tuner.evaluate_telemetry(self.last_telemetry.get("telemetry", {}))
                     if tune_msg:
                         logger.info("Beta tuning Alpha's RL pathfinding weights...")
                         await self.ipc.send(tune_msg)
 
-                # Mode 2: Notification & User Direction Request
-                # Send immediate first notification on stabilization, then periodically
-                now = time.time()
-                time_since_last = now - self.last_notification_time
-                notification_interval_sec = config.notification_interval_minutes * 60
-
-                if self.last_notification_time == 0.0 or time_since_last >= notification_interval_sec:
-                    logger.info("Triggering user notification & direction prompt...")
+                # 3. Outreach & Inquiries with Adaptive Backoff
+                if self.strategist.should_attempt_contact():
+                    logger.info(f"Triggering outreach dispatch (Attempt #{self.strategist.contact_attempt_count + 1})...")
                     question = self.discovery.formulate_user_question(self.last_telemetry)
-                    self.notifier.notify_status(self.last_telemetry, custom_question=question)
-                    self.last_notification_time = now
+                    notify_res = self.notifier.notify_status(self.last_telemetry, custom_question=question)
+                    self.strategist.mark_contact_attempted()
 
-                # Mode 3: Goal Discovery
-                if iteration % 4 == 0:
+                    # Beta diagnoses delivery barriers using local Ollama model
+                    channels = notify_res.get("channels", {})
+                    adaptation = self.strategist.analyze_and_adapt(channels)
+                    logger.info(f"Delivery diagnosis: {adaptation.get('barrier_summary')}")
+
+                    # Record cycle in ACTIVITY_LOG.md
+                    self.activity_logger.log_cycle(
+                        alpha_status=self.last_telemetry,
+                        beta_action=f"Outreach Attempt #{self.strategist.contact_attempt_count} ({adaptation.get('best_working_channel', 'none')})",
+                        outreach_results=channels,
+                        pending_directive_prompt=question
+                    )
+                    # Commit and push ACTIVITY_LOG.md to GitHub
+                    self.activity_logger.commit_and_push(min_interval_seconds=300.0)
+
+                # 4. Periodic Discovery of novel diagnostic tasks
+                if iteration % 6 == 0:
                     novel_task = self.discovery.discover_novel_task(self.last_telemetry)
                     if novel_task:
                         logger.info("Beta enqueuing novel discovered task for Alpha...")
                         await self.ipc.send(novel_task)
 
-                # Wait in idle state (can remain idle for days)
+                # Idle sleep (can remain idle for days)
                 await asyncio.sleep(config.beta_idle_cycle_seconds)
 
             except asyncio.CancelledError:

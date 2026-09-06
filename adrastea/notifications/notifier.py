@@ -4,16 +4,18 @@ from typing import Any, Dict, Optional, Tuple
 from ..config import config
 from .email_service import EmailService
 from .sms_service import SMSService
+from .contact_relay import ContactRelay
 
 logger = logging.getLogger("Adrastea.Notifications")
 
 
 class Notifier:
-    """Unified Notification Coordinator for Adrastea."""
+    """Unified Notification Coordinator for Adrastea using multi-channel ContactRelay."""
 
     def __init__(self):
         self.email_svc = EmailService()
         self.sms_svc = SMSService(email_service=self.email_svc)
+        self.relay = ContactRelay(email_service=self.email_svc, sms_service=self.sms_svc)
 
     def format_status_report(self, system_status: Dict[str, Any], custom_question: Optional[str] = None) -> Tuple[str, str, str]:
         """Construct subject, plain-text body, and HTML body."""
@@ -49,7 +51,7 @@ class Notifier:
             f"--------------------------------------------------\n"
             f"{question}\n"
             f"\n"
-            f"Reply directly to this email or send directives to steer Adrastea's execution plan.\n"
+            f"Reply directly to this email or comment to steer Adrastea's execution plan.\n"
             f"=========================================="
         )
 
@@ -85,25 +87,22 @@ class Notifier:
         return subject, plain_text, html_text
 
     def notify_status(self, system_status: Dict[str, Any], custom_question: Optional[str] = None) -> Dict[str, Any]:
-        """Dispatch notifications via Email and SMS."""
-        subject, plain_text, html_text = self.format_status_report(system_status, custom_question)
+        """Dispatch notifications across all channels using ContactRelay."""
+        question = custom_question or "System operational. What should Adrastea prioritize next?"
+        subject, plain_text, _ = self.format_status_report(system_status, question)
 
-        # 1. Send Email
-        email_ok, email_msg = self.email_svc.send_status_email(subject, plain_text, html_text)
-
-        # 2. Send SMS (concise summary)
-        sms_body = (
-            f"Adrastea Status: RUNNING. Active: {len(system_status.get('active_tasks', []))}. "
-            f"What should Adrastea do next? Check user@example.com for details."
+        # Dispatch via all channels in ContactRelay
+        outreach_results = self.relay.dispatch_all(
+            subject=subject,
+            body_text=plain_text,
+            custom_question=question
         )
-        sms_ok, sms_msg = self.sms_svc.send_sms(sms_body)
 
-        logger.info(f"Notification summary: Email={'OK' if email_ok else 'FAIL'} ({email_msg}), SMS={'OK' if sms_ok else 'FAIL'} ({sms_msg})")
+        delivered = any(res.get("success") for res in outreach_results.values())
+        logger.info(f"Multi-channel outreach completed. Any delivered: {delivered}. Results: {outreach_results}")
 
         return {
-            "email_sent": email_ok,
-            "email_status": email_msg,
-            "sms_sent": sms_ok,
-            "sms_status": sms_msg,
+            "delivered": delivered,
+            "channels": outreach_results,
             "timestamp": datetime.datetime.now().isoformat()
         }
