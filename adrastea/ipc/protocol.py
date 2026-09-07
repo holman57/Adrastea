@@ -11,6 +11,8 @@ class SignalType(str, Enum):
     SIG_SPAWN = "SIG_SPAWN"
     SIG_HEARTBEAT = "SIG_HEARTBEAT"
     SIG_SHUTDOWN = "SIG_SHUTDOWN"
+    SIG_SLEEP = "SIG_SLEEP"
+    SIG_WAKE = "SIG_WAKE"
 
     # Alpha -> Beta
     SIG_TELEMETRY = "SIG_TELEMETRY"
@@ -24,6 +26,9 @@ class SignalType(str, Enum):
     SIG_MUTATE = "SIG_MUTATE"
     SIG_TUNE_WEIGHTS = "SIG_TUNE_WEIGHTS"
     SIG_QUERY_STATUS = "SIG_QUERY_STATUS"
+
+    # Speech Flow & Conversational Interface
+    SIG_CONVERSATION = "SIG_CONVERSATION"
 
 
 @dataclass

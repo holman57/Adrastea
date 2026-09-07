@@ -130,10 +130,13 @@ sequenceDiagram
 | Signal | Origin | Purpose |
 | :--- | :---: | :--- |
 | `SIG_SPAWN` | Alpha $\rightarrow$ Beta | Initial process bootstrapping after Alpha achieves stable state. |
+| `SIG_HEARTBEAT` | Any $\leftrightarrow$ Any | Keep-alive liveness ping and health/sleep state verification. |
+| `SIG_SLEEP` | Any $\rightarrow$ Alpha/Beta | Transitions the engines into long-period low-overhead keepalive sleep. |
+| `SIG_WAKE` | Any $\rightarrow$ Alpha/Beta | Wakes sleeping engines back to active deterministic & cognitive cycles. |
 | `SIG_TELEMETRY` | Alpha $\rightarrow$ Beta | Outcome scores, exit statuses, resource metrics, and state snapshots. |
 | `SIG_STUCK` | Alpha $\rightarrow$ Beta | Notification that Alpha has reached a dead-end, threshold loop, or unhandled block. |
 | `SIG_INTERRUPT` | Beta $\rightarrow$ Alpha | Immediately halts an active, stuck, or invalidated local task execution. |
-| `SIG_DISPATCH` | Beta $\rightarrow$ Alpha | Inserts new or modified task plans into Alpha's execution queue. |
+| `SIG_DISPATCH` | Beta/User $\rightarrow$ Alpha | Inserts new or modified task plans into Alpha's execution queue (wakes if asleep). |
 | `SIG_MUTATE` | Beta $\rightarrow$ Alpha | Dynamically updates parameters, payloads, or configurations of in-flight tasks. |
 | `SIG_TUNE_WEIGHTS` | Beta $\rightarrow$ Alpha | Updates the reward/penalty scoring matrix in Alpha's RL planner. |
 
@@ -162,6 +165,32 @@ sequenceDiagram
   * Local execution runtime (PowerShell / Bash / Python / Node) for Alpha's task runner.
 * **IPC Transport**:
   * Asynchronous cross-process message bus or socket transport supporting structured JSON / Protocol Buffer envelopes.
+
+---
+
+## Keep-Alive & Long-Sleep Mode
+
+Adrastea includes a rudimentary keep-alive process coordinator (`KeepAliveProcess`) that enables the system to **sleep for long periods of time** (reducing CPU, memory, and LLM token usage) while continuously maintaining:
+1. **Active Listening**: Alpha's IPC TCP server (`127.0.0.1:8765`), client channels, and `DIRECTIVES.txt` watchers remain active.
+2. **Real-Time Signaling**: Signal routing for `SIG_HEARTBEAT`, `SIG_WAKE`, `SIG_SLEEP`, and `SIG_DISPATCH` handles events with sub-millisecond responsiveness.
+3. **Supervised Background Processes**: System Beta subprocess and asynchronous task runners remain supervised and active in the background. If a background process terminates unexpectedly, the supervisor revives it.
+4. **Instant Event Waking**: Any incoming user directive or dispatch signal immediately wakes the system from sleep without waiting for the sleep timer to expire.
+
+### CLI Usage
+
+```powershell
+# Launch in keep-alive mode with custom sleep interval (e.g., 300 seconds)
+python -m adrastea.cli keepalive --sleep-interval 300
+
+# Ping running Adrastea instance via keep-alive heartbeat
+python -m adrastea.cli ping
+
+# Put running Adrastea into keep-alive sleep for 600 seconds
+python -m adrastea.cli sleep --duration 600
+
+# Wake sleeping Adrastea back to full active cycle
+python -m adrastea.cli wake
+```
 
 ---
 

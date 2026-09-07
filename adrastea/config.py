@@ -46,6 +46,10 @@ class Config:
     ipc_port: int = int(os.getenv("ADRASTEA_IPC_PORT", "8765"))
     ipc_auth_token: str = os.getenv("ADRASTEA_IPC_TOKEN", "adrastea-local-secure-token")
 
+    # Keep-Alive & Standby Settings
+    keepalive_sleep_seconds: float = float(os.getenv("ADRASTEA_KEEPALIVE_SLEEP_SECONDS", "300.0"))
+    keepalive_heartbeat_interval: float = float(os.getenv("ADRASTEA_HEARTBEAT_INTERVAL", "60.0"))
+
     # Alpha Engine Settings
     alpha_tick_interval: float = float(os.getenv("ALPHA_TICK_INTERVAL_SECONDS", "3.0"))
     alpha_stabilization_seconds: float = float(os.getenv("ALPHA_STABILIZATION_SECONDS", "2.0"))

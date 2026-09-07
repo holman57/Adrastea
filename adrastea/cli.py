@@ -90,7 +90,14 @@ def cmd_test_llm():
 
 def main():
     parser = argparse.ArgumentParser(description="Adrastea Autonomous Orchestrator")
-    parser.add_argument("command", choices=["start", "notify", "test-llm", "status"], default="start", nargs="?")
+    parser.add_argument(
+        "command",
+        choices=["start", "keepalive", "ping", "wake", "sleep", "notify", "test-llm", "status"],
+        default="start",
+        nargs="?"
+    )
+    parser.add_argument("--sleep-interval", type=float, default=config.keepalive_sleep_seconds, help="Sleep duration in seconds for keep-alive")
+    parser.add_argument("--duration", type=float, default=config.keepalive_sleep_seconds, help="Duration in seconds for sleep command")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose debug logging")
     args = parser.parse_args()
 
@@ -98,6 +105,27 @@ def main():
 
     if args.command == "start":
         asyncio.run(run_orchestrator())
+    elif args.command == "keepalive":
+        from .keepalive import run_keepalive_service
+        asyncio.run(run_keepalive_service(args.sleep_interval))
+    elif args.command == "ping":
+        from .keepalive import KeepAliveProcess
+        res = asyncio.run(KeepAliveProcess.ping())
+        if res:
+            print(f"PONG: Adrastea is ALIVE. Roundtrip: {res.get('roundtrip_ms')}ms")
+            print(f"State: {'SLEEPING (Keep-Alive)' if res.get('sleeping') else 'ACTIVE'}")
+            print(f"Uptime: {res.get('uptime_seconds')}s | Beta Alive: {res.get('beta_alive')}")
+        else:
+            print("FAILED: Adrastea is not responding.")
+            sys.exit(1)
+    elif args.command == "wake":
+        from .keepalive import KeepAliveProcess
+        res = asyncio.run(KeepAliveProcess.remote_wake())
+        print(f"Result: {res}")
+    elif args.command == "sleep":
+        from .keepalive import KeepAliveProcess
+        res = asyncio.run(KeepAliveProcess.remote_sleep(duration=args.duration))
+        print(f"Result: {res}")
     elif args.command == "notify":
         cmd_notify()
     elif args.command == "test-llm":

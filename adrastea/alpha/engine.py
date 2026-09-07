@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 import time
 from typing import Any, Dict, Optional
 
@@ -27,6 +28,9 @@ class AlphaEngine:
         self.local_llm = LocalLLMClient(base_url=config.ollama_base_url, model=config.ollama_model)
 
         self._running = False
+        self._sleeping = False
+        self._wake_event = asyncio.Event()
+        self.sleep_interval = config.keepalive_sleep_seconds
         self._loop_task: Optional[asyncio.Task] = None
         self._beta_spawned = False
         self.start_time = 0.0
@@ -41,6 +45,118 @@ class AlphaEngine:
         self.ipc.register_handler(SignalType.SIG_TUNE_WEIGHTS, self._on_tune_weights)
         self.ipc.register_handler(SignalType.SIG_QUERY_STATUS, self._on_query_status)
         self.ipc.register_handler(SignalType.SIG_SHUTDOWN, self._on_shutdown_signal)
+        self.ipc.register_handler(SignalType.SIG_HEARTBEAT, self._on_heartbeat)
+        self.ipc.register_handler(SignalType.SIG_SLEEP, self._on_sleep)
+        self.ipc.register_handler(SignalType.SIG_WAKE, self._on_wake)
+        self.ipc.register_handler(SignalType.SIG_CONVERSATION, self._on_conversation)
+
+    async def _on_heartbeat(self, msg: Message) -> Message:
+        uptime = time.time() - self.start_time if self.start_time else 0
+        beta_alive = self.spawner.process is not None and self.spawner.process.returncode is None
+        logger.debug(f"Received SIG_HEARTBEAT from {msg.sender}")
+        return Message(
+            signal=SignalType.SIG_HEARTBEAT,
+            sender="Alpha",
+            payload={
+                "status": "alive",
+                "sleeping": self._sleeping,
+                "sleep_interval": self.sleep_interval,
+                "uptime_seconds": round(uptime, 2),
+                "beta_alive": beta_alive,
+                "active_tasks": self.runner.list_active_tasks(),
+                "timestamp": time.time()
+            }
+        )
+
+    async def _on_sleep(self, msg: Message) -> Message:
+        duration = msg.payload.get("duration", self.sleep_interval)
+        logger.info(f"Received SIG_SLEEP from {msg.sender}. Entering sleep for {duration}s...")
+        await self.sleep(duration=float(duration))
+        return Message(
+            signal=SignalType.SIG_SLEEP,
+            sender="Alpha",
+            payload={"action": "sleeping", "duration": self.sleep_interval}
+        )
+
+    async def _on_wake(self, msg: Message) -> Message:
+        logger.info(f"Received SIG_WAKE from {msg.sender}. Waking Alpha...")
+        self.wake()
+        return Message(
+            signal=SignalType.SIG_WAKE,
+            sender="Alpha",
+            payload={"action": "awake"}
+        )
+
+    async def _on_conversation(self, msg: Message) -> Message:
+        """Handle conversational input from Speech Flow, decide response/action, and return speech payload."""
+        text = msg.payload.get("text", "").strip()
+        word_buffer = msg.payload.get("words", [])
+        logger.info(f"Speech Flow input received: '{text}' ({len(word_buffer)} words)")
+
+        text_lower = text.lower()
+        response_text = ""
+        action_taken = "none"
+
+        # 1. Direct Voice Command Interpretations
+        if any(w in text_lower for w in ["status", "system status", "how are you", "what is your status"]):
+            st = self.get_status()
+            state_str = "sleeping in keep-alive mode" if st["sleeping"] else "active"
+            response_text = (
+                f"Adrastea is currently {state_str}. "
+                f"Uptime is {int(st['uptime_seconds'])} seconds, with {len(st['active_tasks'])} active tasks "
+                f"and {st['scheduled_tasks_count']} scheduled tasks registered."
+            )
+            action_taken = "status_report"
+
+        elif any(w in text_lower for w in ["wake up", "wake", "resume", "start working"]):
+            self.wake()
+            response_text = "System Alpha has awakened from keep-alive mode. Task scheduler and deterministic loop are active."
+            action_taken = "system_wake"
+
+        elif any(w in text_lower for w in ["go to sleep", "sleep", "standby", "rest"]):
+            await self.sleep()
+            response_text = f"Adrastea entering keep-alive sleep for {int(self.sleep_interval)} seconds. Listening and signaling remain active."
+            action_taken = "system_sleep"
+
+        elif any(w in text_lower for w in ["health check", "diagnostics", "system health", "cpu", "memory", "ram"]):
+            cmd_health = f'"{sys.executable}" -c "import psutil; print(f\'SYSTEM_HEALTH: CPU={{psutil.cpu_percent()}}%, RAM={{psutil.virtual_memory().percent}}%\')"'
+            task_id = f"voice_diag_{int(time.time())}"
+            self.scheduler.dispatch(task_id, cmd_health, priority=100)
+            if self._sleeping:
+                self.wake()
+            response_text = "Dispatched an immediate system health and resource diagnostic."
+            action_taken = "dispatch_diagnostic"
+
+        else:
+            # 2. General Conversational Reasoning (Ollama / LLM)
+            uptime_s = int(time.time() - self.start_time if self.start_time else 0)
+            status_summary = f"State: {'Sleeping' if self._sleeping else 'Active'}, Uptime: {uptime_s}s, Tasks: {len(self.scheduler.tasks)}"
+            prompt = (
+                f"User spoken input from Speech Flow: '{text}'\n"
+                f"Adrastea system context: {status_summary}\n"
+                f"Respond with a clear, conversational answer (1 to 2 sentences) suitable for text-to-speech audio playback."
+            )
+            llm_resp = self.local_llm.generate(prompt, system="You are Adrastea, an autonomous paired AI orchestrator. Speak concisely and clearly.")
+            if llm_resp:
+                response_text = llm_resp.strip()
+            else:
+                response_text = f"Processed voice input: {text}. Adrastea operational."
+            action_taken = "conversational_dialogue"
+
+        return Message(
+            signal=SignalType.SIG_CONVERSATION,
+            sender="Adrastea",
+            payload={
+                "reply_to": msg.message_id,
+                "text": response_text,
+                "action": action_taken,
+                "system_status": {
+                    "sleeping": self._sleeping,
+                    "uptime_seconds": round(time.time() - self.start_time if self.start_time else 0, 1),
+                },
+                "timestamp": time.time()
+            }
+        )
 
     async def _on_interrupt(self, msg: Message) -> Optional[Message]:
         task_id = msg.payload.get("task_id")
@@ -58,9 +174,13 @@ class AlphaEngine:
         task_id = msg.payload.get("task_id")
         command = msg.payload.get("command")
         priority = msg.payload.get("priority", 20)
-        logger.info(f"Received SIG_DISPATCH from Beta: [{task_id}] -> {command}")
+        logger.info(f"Received SIG_DISPATCH from {msg.sender}: [{task_id}] -> {command}")
         if task_id and command:
             self.scheduler.dispatch(task_id, command, priority=priority, metadata=msg.payload.get("metadata", {}))
+            # If sleeping, wake Alpha to execute the newly dispatched task immediately
+            if self._sleeping:
+                logger.info(f"Dispatched task [{task_id}] waking Alpha from keep-alive sleep...")
+                self.wake()
             return Message(
                 signal=SignalType.SIG_TELEMETRY,
                 sender="Alpha",
@@ -104,11 +224,46 @@ class AlphaEngine:
         logger.info("Received SIG_SHUTDOWN from Beta.")
         await self.stop()
 
+    async def sleep(self, duration: Optional[float] = None) -> None:
+        """Put Alpha and Beta into low-overhead keepalive sleep mode."""
+        if duration is not None:
+            self.sleep_interval = float(duration)
+        self._sleeping = True
+        self._wake_event.clear()
+        logger.info(f"System Alpha entering keep-alive sleep mode (interval: {self.sleep_interval}s). Listening and signaling remain active.")
+        # Broadcast sleep signal to Beta so it enters sleep mode as well
+        await self.ipc.broadcast(
+            Message(
+                signal=SignalType.SIG_SLEEP,
+                sender="Alpha",
+                payload={"duration": self.sleep_interval}
+            )
+        )
+
+    def wake(self) -> None:
+        """Wake Alpha and Beta from sleep mode immediately."""
+        self._sleeping = False
+        self._wake_event.set()
+        logger.info("System Alpha woken from sleep mode. Resuming standard cycles.")
+        # Broadcast wake signal to Beta
+        if self.ipc._running:
+            asyncio.create_task(
+                self.ipc.broadcast(
+                    Message(
+                        signal=SignalType.SIG_WAKE,
+                        sender="Alpha",
+                        payload={"status": "awake"}
+                    )
+                )
+            )
+
     def get_status(self) -> Dict[str, Any]:
         uptime = time.time() - self.start_time if self.start_time else 0
         return {
             "uptime_seconds": round(uptime, 2),
             "running": self._running,
+            "sleeping": self._sleeping,
+            "sleep_interval": self.sleep_interval,
             "beta_spawned": self._beta_spawned,
             "active_tasks": self.runner.list_active_tasks(),
             "scheduled_tasks_count": len(self.scheduler.tasks),
@@ -148,6 +303,26 @@ class AlphaEngine:
 
         while self._running:
             try:
+                if self._sleeping:
+                    try:
+                        # Sleep for long period of time, waking immediately if signaled
+                        await asyncio.wait_for(self._wake_event.wait(), timeout=self.sleep_interval)
+                        # An event woke Alpha up!
+                        self._sleeping = False
+                        self._wake_event.clear()
+                        logger.info("Alpha awakened from keep-alive sleep by event.")
+                    except asyncio.TimeoutError:
+                        # Keep-alive sleep interval elapsed; pulse keep-alive heartbeat
+                        logger.debug("Alpha keep-alive interval elapsed. Emitting keep-alive pulse...")
+                        await self.ipc.broadcast(
+                            Message(
+                                signal=SignalType.SIG_HEARTBEAT,
+                                sender="Alpha",
+                                payload=self.get_status()
+                            )
+                        )
+                        continue
+
                 # Retrieve due tasks ordered by RL planner
                 due_tasks = self.scheduler.get_due_tasks()
                 for task in due_tasks[:config.alpha_max_concurrent_tasks]:

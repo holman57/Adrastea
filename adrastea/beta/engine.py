@@ -36,6 +36,9 @@ class BetaEngine:
         self.activity_logger = ActivityLogger()
 
         self._running = False
+        self._sleeping = False
+        self._wake_event = asyncio.Event()
+        self.sleep_interval = config.keepalive_sleep_seconds
         self._loop_task: Optional[asyncio.Task] = None
         self.last_telemetry: Dict[str, Any] = {}
 
@@ -45,6 +48,29 @@ class BetaEngine:
         self.ipc.register_handler(SignalType.SIG_TELEMETRY, self._on_telemetry)
         self.ipc.register_handler(SignalType.SIG_STUCK, self._on_stuck)
         self.ipc.register_handler(SignalType.SIG_TASK_FAILED, self._on_task_failed)
+        self.ipc.register_handler(SignalType.SIG_HEARTBEAT, self._on_heartbeat)
+        self.ipc.register_handler(SignalType.SIG_SLEEP, self._on_sleep)
+        self.ipc.register_handler(SignalType.SIG_WAKE, self._on_wake)
+
+    async def _on_heartbeat(self, msg: Message) -> Message:
+        logger.debug(f"Beta received heartbeat from {msg.sender}")
+        return Message(
+            signal=SignalType.SIG_HEARTBEAT,
+            sender="Beta",
+            payload={"status": "alive", "sleeping": self._sleeping, "timestamp": time.time()}
+        )
+
+    async def _on_sleep(self, msg: Message) -> None:
+        duration = msg.payload.get("duration", self.sleep_interval)
+        self.sleep_interval = float(duration)
+        self._sleeping = True
+        self._wake_event.clear()
+        logger.info(f"Beta entered keep-alive sleep mode (interval: {self.sleep_interval}s). Listening and signaling remain active.")
+
+    async def _on_wake(self, msg: Message) -> None:
+        self._sleeping = False
+        self._wake_event.set()
+        logger.info("Beta received SIG_WAKE. Waking to active mode.")
 
     async def _on_telemetry(self, msg: Message) -> None:
         self.last_telemetry = msg.payload
@@ -99,6 +125,12 @@ class BetaEngine:
                     logger.info(f"Directives received from Luke: '{directive}'")
                     self.strategist.reset_backoff_on_response()
 
+                    # If sleeping, wake both Beta and Alpha
+                    if self._sleeping:
+                        self._sleeping = False
+                        self._wake_event.set()
+                        await self.ipc.send(Message(signal=SignalType.SIG_WAKE, sender="Beta"))
+
                     # Significant happening: User directive received!
                     safe_dir = directive.replace("'", "\\'")
                     cmd = f'python -c "print(\'Executed user directive: {safe_dir}\')"'
@@ -124,6 +156,18 @@ class BetaEngine:
                         f"adopted user directive '{directive[:40]}'",
                         bypass_cooldown=True
                     )
+
+                # If in keep-alive sleep mode, sleep for long interval without heavy loops
+                if self._sleeping:
+                    logger.debug(f"Beta resting in keep-alive standby for {self.sleep_interval}s...")
+                    try:
+                        await asyncio.wait_for(self._wake_event.wait(), timeout=self.sleep_interval)
+                        self._sleeping = False
+                        self._wake_event.clear()
+                        logger.info("Beta awakened from keep-alive sleep by event.")
+                    except asyncio.TimeoutError:
+                        pass
+                    continue
 
                 # 2. Heuristic Pathfinding Tuning
                 if self.last_telemetry:

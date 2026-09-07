@@ -97,6 +97,8 @@ class IPCServer:
             try:
                 resp = await handler(msg)
                 if resp:
+                    if "reply_to" not in resp.payload:
+                        resp.payload["reply_to"] = msg.message_id
                     writer.write(resp.to_json().encode("utf-8"))
                     await writer.drain()
             except Exception as e:
@@ -104,7 +106,7 @@ class IPCServer:
 
 
 class IPCClient:
-    """IPC Client used by System Beta to connect to System Alpha."""
+    """IPC Client used by System Beta and Keep-Alive processes to connect to System Alpha."""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 8765):
         self.host = host
@@ -114,6 +116,8 @@ class IPCClient:
         self.handlers: Dict[SignalType, List[HandlerType]] = {}
         self._running = False
         self._listener_task: Optional[asyncio.Task] = None
+        self._pending_queries: Dict[str, asyncio.Future] = {}
+        self._pending_signal_waiters: Dict[SignalType, List[asyncio.Future]] = {}
 
     def register_handler(self, signal: SignalType, handler: HandlerType) -> None:
         if signal not in self.handlers:
@@ -126,7 +130,7 @@ class IPCClient:
                 self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
                 self._running = True
                 self._listener_task = asyncio.create_task(self._listen_loop())
-                logger.info(f"Beta connected to Alpha IPC Server at {self.host}:{self.port}")
+                logger.info(f"Connected to Alpha IPC Server at {self.host}:{self.port}")
                 return True
             except Exception as e:
                 logger.debug(f"IPC connect attempt {attempt + 1}/{retries} failed: {e}")
@@ -143,7 +147,13 @@ class IPCClient:
                 await self.writer.wait_closed()
             except Exception:
                 pass
-        logger.info("Beta disconnected from Alpha IPC.")
+        # Cancel any pending queries
+        for fut in list(self._pending_queries.values()):
+            if not fut.done():
+                fut.cancel()
+        self._pending_queries.clear()
+        self._pending_signal_waiters.clear()
+        logger.info("Disconnected from Alpha IPC.")
 
     async def send(self, message: Message) -> bool:
         if not self.writer or not self._running:
@@ -155,6 +165,35 @@ class IPCClient:
         except Exception as e:
             logger.error(f"Failed to send message {message.signal}: {e}")
             return False
+
+    async def query(self, message: Message, timeout: float = 5.0) -> Optional[Message]:
+        """Send a message and await a matching response via IPC."""
+        if not self.writer or not self._running:
+            return None
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+        self._pending_queries[message.message_id] = future
+
+        # Also register by signal in case responder doesn't preserve message_id
+        sig = message.signal
+        if sig not in self._pending_signal_waiters:
+            self._pending_signal_waiters[sig] = []
+        self._pending_signal_waiters[sig].append(future)
+
+        if not await self.send(message):
+            self._pending_queries.pop(message.message_id, None)
+            if sig in self._pending_signal_waiters and future in self._pending_signal_waiters[sig]:
+                self._pending_signal_waiters[sig].remove(future)
+            return None
+
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            self._pending_queries.pop(message.message_id, None)
+            if sig in self._pending_signal_waiters and future in self._pending_signal_waiters[sig]:
+                self._pending_signal_waiters[sig].remove(future)
 
     async def _listen_loop(self) -> None:
         buffer = ""
@@ -169,6 +208,24 @@ class IPCClient:
                     if line.strip():
                         try:
                             msg = Message.from_json(line)
+                            # Check pending queries by reply_to
+                            reply_to = msg.payload.get("reply_to")
+                            resolved = False
+                            if reply_to and reply_to in self._pending_queries:
+                                fut = self._pending_queries.pop(reply_to)
+                                if not fut.done():
+                                    fut.set_result(msg)
+                                    resolved = True
+
+                            # Check pending signal waiters if not resolved
+                            if not resolved and msg.signal in self._pending_signal_waiters:
+                                waiters = self._pending_signal_waiters[msg.signal]
+                                while waiters:
+                                    w_fut = waiters.pop(0)
+                                    if not w_fut.done():
+                                        w_fut.set_result(msg)
+                                        break
+
                             handlers = self.handlers.get(msg.signal, [])
                             for handler in handlers:
                                 await handler(msg)
