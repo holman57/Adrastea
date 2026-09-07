@@ -51,6 +51,7 @@ class BetaEngine:
         self.ipc.register_handler(SignalType.SIG_HEARTBEAT, self._on_heartbeat)
         self.ipc.register_handler(SignalType.SIG_SLEEP, self._on_sleep)
         self.ipc.register_handler(SignalType.SIG_WAKE, self._on_wake)
+        self.ipc.register_handler(SignalType.SIG_GOALS_STATUS, self._on_goals_status)
 
     async def _on_heartbeat(self, msg: Message) -> Message:
         logger.debug(f"Beta received heartbeat from {msg.sender}")
@@ -98,6 +99,10 @@ class BetaEngine:
     async def _on_task_failed(self, msg: Message) -> None:
         logger.info(f"Task failed notification: {msg.payload.get('task_id')}")
 
+    async def _on_goals_status(self, msg: Message) -> None:
+        goals = msg.payload.get("goals", {})
+        logger.debug(f"Beta received goals status update from Alpha: {len(goals)} goals active.")
+
     async def start(self) -> None:
         """Connect to Alpha IPC and start cognitive loop."""
         self._running = True
@@ -122,7 +127,9 @@ class BetaEngine:
                 # 1. Check for user directives from Luke (DIRECTIVES.txt or GitHub Issue comments)
                 directive = self.watcher.check_directives()
                 if directive:
-                    logger.info(f"Directives received from Luke: '{directive}'")
+                    goal_id = getattr(directive, "goal_id", None)
+                    issue_num = getattr(directive, "issue_number", None)
+                    logger.info(f"Directives received from Luke: '{directive}' (Goal: {goal_id}, Issue: #{issue_num})")
                     self.strategist.reset_backoff_on_response()
 
                     # If sleeping, wake both Beta and Alpha
@@ -131,8 +138,29 @@ class BetaEngine:
                         self._wake_event.set()
                         await self.ipc.send(Message(signal=SignalType.SIG_WAKE, sender="Beta"))
 
-                    # Significant happening: User directive received!
-                    safe_dir = directive.replace("'", "\\'")
+                    # A. Goal Steering: If directive targets a specific goal, tune it immediately
+                    if goal_id:
+                        logger.info(f"Targeted directive steering for goal [{goal_id}]...")
+                        tune_payload: Dict[str, Any] = {
+                            "goal_id": goal_id,
+                            "weight": 2.5,
+                            "parameters": {"latest_user_instruction": str(directive)},
+                        }
+                        if goal_id == "ecosystem_repos":
+                            d_lower = str(directive).lower()
+                            for repo in ["speech-flow", "interpretive-interface", "distributed-content-management"]:
+                                if repo in d_lower or repo.replace("-", " ") in d_lower:
+                                    tune_payload["parameters"]["focus_repo"] = repo
+                        await self.ipc.send(
+                            Message(
+                                signal=SignalType.SIG_TUNE_GOALS,
+                                sender="Beta",
+                                payload=tune_payload,
+                            )
+                        )
+
+                    # B. Dispatch execution task for Alpha
+                    safe_dir = str(directive).replace("'", "\\'")
                     cmd = f'python -c "print(\'Executed user directive: {safe_dir}\')"'
                     await self.ipc.send(
                         Message(
@@ -142,18 +170,59 @@ class BetaEngine:
                                 "task_id": f"user_directive_{int(time.time())}",
                                 "command": cmd,
                                 "priority": 100,
-                                "metadata": {"user_directive": directive}
+                                "metadata": {
+                                    "user_directive": str(directive),
+                                    "goal_id": goal_id,
+                                    "issue_number": issue_num,
+                                }
                             }
                         )
                     )
 
-                    # Log locally and push significant event to GitHub immediately
+                    # C. Bidirectional Correspondence: Reply directly back to the GitHub issue
+                    if getattr(directive, "source", None) == "github_issue" and issue_num:
+                        target_label = f"Goal: {goal_id}" if goal_id else (getattr(directive, "topic", None) or f"Issue #{issue_num}")
+                        reply_markdown = (
+                            f"**Autonomous Directive Adoption & Response for @{directive.author}**\n\n"
+                            f"- **Target Scope:** `{target_label}`\n"
+                            f"- **Received Directive:**\n"
+                            f"  > {directive.text}\n\n"
+                            f"- **Action Taken:**\n"
+                            f"  - Adopted into System Beta cognitive loop and prioritized in System Alpha task scheduler.\n"
+                            f"  - Associated goal parameters and priority weights dynamically tuned.\n"
+                            f"  - Execution task dispatched.\n\n"
+                            f"- **Current State:** Operational. Standing by for your next steer on this thread (anti-spam wait active)."
+                        )
+                        try:
+                            resp = self.watcher.correspondence_manager.post_response_to_issue(
+                                issue_number=issue_num,
+                                response_markdown=reply_markdown,
+                                force=True,
+                            )
+                            logger.info(f"Dispatched correspondence reply to Issue #{issue_num}: {resp.get('details')}")
+                        except Exception as e:
+                            logger.error(f"Failed to post correspondence reply to Issue #{issue_num}: {e}")
+
+                    # D. Ingest into Knowledge Graph Memory
+                    try:
+                        from ..knowledge.memory_manager import MemoryManager
+                        mm = MemoryManager()
+                        mm.record_user_directive(
+                            directive_text=str(directive),
+                            source=f"github_issue_#{issue_num}" if issue_num else getattr(directive, "source", "DIRECTIVES.txt"),
+                            target_goal=goal_id,
+                            issue_number=issue_num,
+                        )
+                    except Exception as e:
+                        logger.debug(f"Knowledge memory ingestion note: {e}")
+
+                    # E. Log locally and commit/push significant event
                     self.activity_logger.log_cycle(
                         alpha_status=self.last_telemetry,
-                        beta_action=f"Adopted and executed user directive: '{directive}'"
+                        beta_action=f"Adopted and executed user directive on #{issue_num or 'local'}: '{directive[:50]}'"
                     )
                     self.activity_logger.commit_and_push_significant_event(
-                        f"adopted user directive '{directive[:40]}'",
+                        f"adopted user directive on #{issue_num or 'local'}: '{directive[:40]}'",
                         bypass_cooldown=True
                     )
 
@@ -169,12 +238,22 @@ class BetaEngine:
                         pass
                     continue
 
-                # 2. Heuristic Pathfinding Tuning
+                # 2. Heuristic Pathfinding & Autonomous Goal Tuning
                 if self.last_telemetry:
                     tune_msg = self.tuner.evaluate_telemetry(self.last_telemetry.get("telemetry", {}))
                     if tune_msg:
                         logger.info("Beta tuning Alpha's RL pathfinding weights...")
                         await self.ipc.send(tune_msg)
+
+                    goals_data = self.last_telemetry.get("goals", {})
+                    goal_tune_signals = self.tuner.evaluate_goals(
+                        telemetry=self.last_telemetry.get("telemetry", {}),
+                        goals_data=goals_data,
+                        recent_directive=directive
+                    )
+                    for g_sig in goal_tune_signals:
+                        logger.info(f"Beta dynamically tuning Alpha goal [{g_sig.payload.get('goal_id')}]: {g_sig.payload}")
+                        await self.ipc.send(g_sig)
 
                 # 3. Outreach & Inquiries with Adaptive Backoff (Logs locally without pushing to GitHub)
                 if self.strategist.should_attempt_contact():

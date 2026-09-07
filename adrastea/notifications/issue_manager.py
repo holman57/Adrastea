@@ -1,0 +1,532 @@
+import json
+import logging
+import re
+import subprocess
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from ..config import config
+
+logger = logging.getLogger("Adrastea.Notifications.IssueManager")
+
+# Strict Security Enforcement: Only accept directives and input from Luke (@holman57)
+AUTHORIZED_OPERATOR = "holman57"
+
+# Standard autonomous goals definitions for GitHub issue correspondence
+GOAL_DEFINITIONS = {
+    "adrastea_self_evolution": {
+        "title": "[Goal] Adrastea Self-Evolution & Repository Growth",
+        "labels": ["goal", "autonomous", "enhancement"],
+        "summary": "Autonomous codebase analysis, automated regression testing, visibility audits, and repo growth.",
+        "body": """### [Goal] Adrastea Self-Evolution & Repository Growth
+
+**Autonomous System Objective:**
+System Alpha's self-evolution engine continuously inspects the Adrastea codebase, runs automated self-tests, audits documentation completeness and visibility, and formulates repository enhancements.
+
+---
+
+### Operational Scope & Capabilities
+1. **Automated Regression Testing:** Executes the test suite in `tests/` to guarantee zero regressions during autonomous iterations.
+2. **Repository Health & Git Audit:** Monitors branch state, commit history, unstaged diffs, and workspace integrity.
+3. **Visibility & Documentation Auditing:** Verifies `README.md`, `ACTIVITY_LOG.md`, and operational directives for release readiness.
+4. **Autonomous Refactoring:** Generates optimizations and architectural upgrades to improve system reliability.
+
+---
+
+### Key Open Questions for Luke (@holman57)
+1. **Upgrade Prioritization:** Which architectural areas should Adrastea prioritize for enhancements next? (e.g., local LLM integration pipelines, automated benchmark suites, or local knowledge graph retrieval)?
+2. **Git Workflow Policy:** Should Adrastea autonomously commit and push small verified changes to `main`, or should it create dedicated feature branches and open Pull Requests for your manual review?
+3. **Quality Gates:** What specific validation criteria (e.g., 100% test pass rate, lint checks, build benchmarks) must pass before changes are committed?
+
+---
+
+### How to Steer This Goal
+Reply directly to this issue with instructions, priorities, or answers to the questions above. Adrastea monitors this thread, will automatically adopt your directions for this goal, adjust its parameters, and report back here.
+"""
+    },
+    "user_coordination": {
+        "title": "[Goal] User Coordination & Strategic Steering",
+        "labels": ["goal", "autonomous"],
+        "summary": "Operator alignment, directive polling, low-noise communication, and anti-spam management.",
+        "body": """### [Goal] User Coordination & Strategic Steering
+
+**Autonomous System Objective:**
+Manages operator alignment, directive ingestion, and non-intrusive communication between Adrastea and Luke (@holman57).
+
+---
+
+### Operational Scope & Capabilities
+1. **Bidirectional GitHub Correspondence:** Corresponds on dedicated issue threads for specific goals and questions, avoiding central thread clutter.
+2. **Directive Ingestion:** Continuously checks local `DIRECTIVES.txt` and GitHub comments from `@holman57`.
+3. **Multi-Channel Dispatch:** Coordinates desktop notifications, GitHub issue threads, and verified email relays.
+4. **Strict Anti-Spam Wait-For-Response Protocol:** Adrastea will never post repeated notifications or clutter threads without receiving a user response first.
+
+---
+
+### Key Open Questions for Luke (@holman57)
+1. **Notification Channel Preferences:** Which channel do you prefer for urgent operational events vs routine milestones? (GitHub issue replies, Windows desktop balloon notifications, or direct email)?
+2. **Cadence & Quiet Hours:** What is your preferred outreach frequency or quiet-hours policy to ensure notifications remain clean and non-distracting?
+3. **Execution Mode:** How would you like Adrastea to balance background autonomous execution versus interactive pair-programming sessions?
+
+---
+
+### How to Steer This Goal
+Reply directly to this issue to tune notification channels, alert urgency, or provide general operational directives.
+"""
+    },
+    "ecosystem_repos": {
+        "title": "[Goal] Companion AI-Managed Projects (speech-flow, interpretive-interface, distributed-content-management)",
+        "labels": ["goal", "autonomous"],
+        "summary": "Supervises, audits, and advances unfinished companion AI-managed projects in the workspace.",
+        "body": """### [Goal] Companion AI-Managed Projects (speech-flow, interpretive-interface, distributed-content-management)
+
+**Autonomous System Objective:**
+Supervises, audits, and advances unfinished companion AI-managed projects located in your workspace directory (`C:\\Users\\LukeH`).
+
+---
+
+### Target Repositories & Status
+1. **`speech-flow`**: Voice input/output processing, audio transcription, and conversational audio bridge.
+   - *Audio Safety Guardrail:* Voice playback across physical speakers is strictly silenced and disabled unless speech-flow is actively running and requested.
+2. **`interpretive-interface`**: Kotlin/Gradle UI and interpretive presentation layer.
+3. **`distributed-content-management`**: Distributed asset and data management framework.
+
+---
+
+### Operational Scope & Capabilities
+- Autonomous project directory scanning, dependency verification, and file inventory.
+- Targeted diagnostic testing (e.g. `unittest` discover for speech-flow, Gradle checks for interpretive-interface).
+- Dynamic focus steering based on operator directives.
+
+---
+
+### Key Open Questions for Luke (@holman57)
+1. **Focus Target:** Which companion project should receive primary developmental focus right now?
+2. **Speech-Flow Architecture:** What are the next planned features for `speech-flow` (e.g. streaming Whisper/Vosk speech recognition, Piper/Coqui TTS models, or push-to-talk triggers)?
+3. **Deliverables:** What are the key milestones or acceptance tests you want achieved for `interpretive-interface` and `distributed-content-management`?
+
+---
+
+### How to Steer This Goal
+Mention any of the three repositories in a comment below (or specify development tasks). Adrastea will route the directive to that project, prioritize its tasks, and report its progress here.
+"""
+    },
+    "knowledge_graph_memory": {
+        "title": "[Goal] Graph Knowledge Base & Multi-Tier Memory System (Neo4j / SQLite)",
+        "labels": ["goal", "autonomous"],
+        "summary": "Multi-tier memory architecture (short/medium/long term) and graph knowledge base (SQLite / Neo4j).",
+        "body": """### [Goal] Graph Knowledge Base & Multi-Tier Memory System (Neo4j / SQLite)
+
+**Autonomous System Objective:**
+Maintains Adrastea's multi-tiered memory architecture and graph-based semantic knowledge representation.
+
+---
+
+### Memory Tiers & Architecture
+1. **Short-Term Memory (Episodic):** Ingests raw execution logs, immediate task telemetry, and recent interaction traces with automatic time-to-live (TTL) decay.
+2. **Medium-Term Memory (Tactical):** Consolidates recurring task outcomes, identifies failure patterns, and tracks weekly heuristics.
+3. **Long-Term Memory (Semantic Knowledge):** Permanently preserves system architecture facts, user directives, companion project registries, and learned solutions.
+4. **Dual Backend Engine:** Runs on high-performance embedded SQLite graph store (`data/knowledge_graph.db`) with official Neo4j driver synchronization when external Neo4j is available.
+
+---
+
+### Key Open Questions for Luke (@holman57)
+1. **Neo4j Configuration:** Do you have an external Neo4j instance running that you'd like Adrastea to synchronize with (connection URI, credentials), or should Adrastea continue using the embedded SQLite graph database as its primary persistent store?
+2. **Retention & Pruning Policy:** What retention window or decay rate should be applied to short-term task traces before they are consolidated or pruned?
+3. **Ontology & Schema:** Are there specific entity types (e.g., CodeArtifacts, FailurePatterns, StrategicDecisions, ToolUsages) or relationship types you would like Adrastea to prioritize in the knowledge graph?
+
+---
+
+### How to Steer This Goal
+Comment below with database preferences, query requests, or retention policy adjustments.
+"""
+    },
+}
+
+# Dedicated architectural question threads
+QUESTION_DEFINITIONS = {
+    "speech_flow_audio_policy": {
+        "title": "[Question] Audio Output Policy & Speech-Flow Voice Bridge Configuration",
+        "labels": ["question", "autonomous"],
+        "summary": "Defines rules and conditions for when physical speaker audio synthesis is permitted.",
+        "body": """### [Question] Audio Output Policy & Speech-Flow Voice Bridge Configuration
+
+**Context:**
+Earlier, system voice synthesis was speaking across physical speakers ("operational waiting for direction"). Per your instructions, this voice was completely terminated and disabled, and voice synthesis is guarded so it only runs when `speech-flow` is actively running.
+
+---
+
+### Specific Questions for Luke (@holman57)
+1. **Audio Activation Criteria:** Under what exact conditions should Adrastea ever output audio over your physical speakers? (e.g., only during an explicit interactive voice session launched via speech-flow, only on critical system alerts, or never unless manually invoked)?
+2. **Hard Mute Toggle:** Do you want an explicit mute toggle / environment variable (`ADRASTEA_AUDIO_MUTED=1`) that hard-disables all audio output across the entire system?
+3. **Preferred Speech Engine:** What text-to-speech engine or voice profile do you prefer for speech-flow when active?
+
+---
+
+### How to Respond
+Leave your preferred policy in a comment below. Adrastea will record your decision into its long-term knowledge base and enforce it across all modules.
+"""
+    },
+    "neo4j_connection_setup": {
+        "title": "[Question] Neo4j Connection & External Graph Synchronization Parameters",
+        "labels": ["question", "autonomous"],
+        "summary": "External graph database connectivity preferences (Neo4j Desktop / Docker vs SQLite).",
+        "body": """### [Question] Neo4j Connection & External Graph Synchronization Parameters
+
+**Context:**
+Adrastea now possesses a graph knowledge base with both an embedded SQLite engine (`data/knowledge_graph.db`) and an official `neo4j` Python driver bridge (`Neo4jGraphStore`).
+
+---
+
+### Specific Questions for Luke (@holman57)
+1. **External Instance:** Do you have an active Neo4j Desktop or Docker instance running that you want Adrastea to synchronize with?
+2. **Connection Parameters:** If yes, what are your preferred connection parameters (default URI: `bolt://localhost:7687`, database name, authentication)?
+3. **Standalone SQLite:** If not, Adrastea will run completely self-contained on the SQLite graph store without requiring an external database.
+
+---
+
+### How to Respond
+Reply with your setup details below. If you prefer keeping SQLite as the standalone backend, simply reply with "Use SQLite".
+"""
+    },
+}
+
+
+class IssueCorrespondenceManager:
+    """Manages dedicated GitHub issue threads for goals and questions, providing bidirectional
+    correspondence, strict anti-spam enforcement (wait-for-response), and security filtering.
+    """
+
+    def __init__(self, repo: str = "holman57/Adrastea", registry_file: Optional[Path] = None):
+        self.repo = repo
+        self.registry_file = registry_file or (config.data_dir / "issue_registry.json")
+        self.registry: Dict[str, Any] = {
+            "goals": {},
+            "questions": {},
+            "issue_to_target": {},
+            "last_synced": 0.0,
+        }
+        self._load_registry()
+
+    def _load_registry(self) -> None:
+        """Load registry from disk if available."""
+        if self.registry_file.exists():
+            try:
+                with open(self.registry_file, "r", encoding="utf-8") as f:
+                    self.registry = json.load(f)
+            except Exception as e:
+                logger.debug(f"Failed to read issue registry: {e}")
+
+    def _save_registry(self) -> None:
+        """Persist registry to disk."""
+        try:
+            self.registry_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.registry_file, "w", encoding="utf-8") as f:
+                json.dump(self.registry, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save issue registry: {e}")
+
+    def list_open_issues(self) -> List[Dict[str, Any]]:
+        """List all open issues in the repository."""
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "list", "--repo", self.repo, "--state", "open", "--json", "number,title,labels,updatedAt"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return json.loads(res.stdout)
+        except Exception as e:
+            logger.debug(f"Failed to list open issues: {e}")
+        return []
+
+    def sync_registry(self) -> Dict[str, Any]:
+        """Scan open GitHub issues to discover existing goal and question threads, updating the registry."""
+        open_issues = self.list_open_issues()
+
+        for issue in open_issues:
+            num = int(issue["number"])
+            title = issue.get("title", "")
+            clean_title = title.lower()
+
+            # Check matching goals
+            for goal_id, defn in GOAL_DEFINITIONS.items():
+                target_title = defn["title"].lower()
+                # Check for direct match or significant words match
+                if defn["title"] == title or (goal_id.replace("_", " ") in clean_title and "[goal]" in clean_title):
+                    self.registry["goals"][goal_id] = {
+                        "issue_number": num,
+                        "title": title,
+                        "last_synced": time.time(),
+                    }
+                    self.registry["issue_to_target"][str(num)] = {"type": "goal", "id": goal_id, "title": title}
+                    break
+
+            # Check matching questions
+            for q_id, defn in QUESTION_DEFINITIONS.items():
+                if defn["title"] == title or (q_id.replace("_", " ") in clean_title and "[question]" in clean_title):
+                    self.registry["questions"][q_id] = {
+                        "issue_number": num,
+                        "title": title,
+                        "last_synced": time.time(),
+                    }
+                    self.registry["issue_to_target"][str(num)] = {"type": "question", "id": q_id, "title": title}
+                    break
+
+        self.registry["last_synced"] = time.time()
+        self._save_registry()
+        return self.registry
+
+    def find_topic_issue(self, topic_title: str) -> Optional[int]:
+        """Check if an open issue for this topic already exists."""
+        clean_target = re.sub(r"[^\w\s]", "", topic_title.lower()).strip()
+        target_words = set(clean_target.split())
+
+        for issue in self.list_open_issues():
+            issue_title = issue.get("title", "")
+            clean_issue = re.sub(r"[^\w\s]", "", issue_title.lower()).strip()
+            issue_words = set(clean_issue.split())
+
+            if clean_target in clean_issue or clean_issue in clean_target:
+                return int(issue["number"])
+            if len(target_words) >= 3:
+                overlap = len(target_words.intersection(issue_words))
+                if overlap / len(target_words) >= 0.6:
+                    return int(issue["number"])
+
+        return None
+
+    def create_topic_issue(self, topic_title: str, body_markdown: str, labels: Optional[List[str]] = None) -> Optional[int]:
+        """Create a new dedicated GitHub issue."""
+        try:
+            cmd = [
+                "gh", "issue", "create",
+                "--repo", self.repo,
+                "--title", topic_title,
+                "--body", body_markdown,
+            ]
+            if labels:
+                for l in labels:
+                    cmd.extend(["--label", l])
+
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            if res.returncode == 0:
+                output_url = res.stdout.strip()
+                logger.info(f"Created dedicated topic issue: {output_url}")
+                match = re.search(r"/issues/(\d+)", output_url)
+                if match:
+                    return int(match.group(1))
+            else:
+                logger.warning(f"Failed to create topic issue: {res.stderr.strip()}")
+        except Exception as e:
+            logger.error(f"Error creating topic issue '{topic_title}': {e}")
+        return None
+
+    def ensure_all_issues(self) -> Dict[str, Any]:
+        """Ensures that every autonomous goal and immediate question has an active open GitHub issue."""
+        self.sync_registry()
+        created_issues: Dict[str, int] = {}
+
+        # 1. Ensure Goal Issues
+        for goal_id, defn in GOAL_DEFINITIONS.items():
+            existing = self.registry["goals"].get(goal_id)
+            if existing and self._is_issue_open(existing["issue_number"]):
+                logger.info(f"Goal [{goal_id}] already active on Issue #{existing['issue_number']}")
+                continue
+
+            # Check if exists on GitHub
+            existing_num = self.find_topic_issue(defn["title"])
+            if existing_num and self._is_issue_open(existing_num):
+                self.registry["goals"][goal_id] = {"issue_number": existing_num, "title": defn["title"]}
+                self.registry["issue_to_target"][str(existing_num)] = {"type": "goal", "id": goal_id, "title": defn["title"]}
+                continue
+
+            # Create new issue
+            logger.info(f"Creating GitHub issue for Goal [{goal_id}]...")
+            new_num = self.create_topic_issue(
+                topic_title=defn["title"],
+                body_markdown=defn["body"],
+                labels=defn["labels"],
+            )
+            if new_num:
+                self.registry["goals"][goal_id] = {"issue_number": new_num, "title": defn["title"]}
+                self.registry["issue_to_target"][str(new_num)] = {"type": "goal", "id": goal_id, "title": defn["title"]}
+                created_issues[goal_id] = new_num
+
+        # 2. Ensure Question Issues
+        for q_id, defn in QUESTION_DEFINITIONS.items():
+            existing = self.registry["questions"].get(q_id)
+            if existing and self._is_issue_open(existing["issue_number"]):
+                logger.info(f"Question [{q_id}] already active on Issue #{existing['issue_number']}")
+                continue
+
+            existing_num = self.find_topic_issue(defn["title"])
+            if existing_num and self._is_issue_open(existing_num):
+                self.registry["questions"][q_id] = {"issue_number": existing_num, "title": defn["title"]}
+                self.registry["issue_to_target"][str(existing_num)] = {"type": "question", "id": q_id, "title": defn["title"]}
+                continue
+
+            logger.info(f"Creating GitHub issue for Question [{q_id}]...")
+            new_num = self.create_topic_issue(
+                topic_title=defn["title"],
+                body_markdown=defn["body"],
+                labels=defn["labels"],
+            )
+            if new_num:
+                self.registry["questions"][q_id] = {"issue_number": new_num, "title": defn["title"]}
+                self.registry["issue_to_target"][str(new_num)] = {"type": "question", "id": q_id, "title": defn["title"]}
+                created_issues[q_id] = new_num
+
+        self._save_registry()
+        return {
+            "created": created_issues,
+            "registry": self.registry,
+        }
+
+    def _is_issue_open(self, issue_number: int) -> bool:
+        """Check if an issue is still open."""
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "view", str(issue_number), "--repo", self.repo, "--json", "state"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                return data.get("state") == "OPEN"
+        except Exception:
+            pass
+        return False
+
+    def get_issue_for_goal(self, goal_id: str) -> Optional[int]:
+        """Lookup issue number for a specific goal."""
+        data = self.registry.get("goals", {}).get(goal_id)
+        if data:
+            return data.get("issue_number")
+        return None
+
+    def get_target_for_issue(self, issue_number: int) -> Optional[Dict[str, str]]:
+        """Lookup target goal or question metadata for an issue number."""
+        return self.registry.get("issue_to_target", {}).get(str(issue_number))
+
+    def get_issue_comments(self, issue_number: int) -> List[Dict[str, Any]]:
+        """Fetch comments for an issue."""
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "view", str(issue_number), "--repo", self.repo, "--json", "comments"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                return data.get("comments", [])
+        except Exception as e:
+            logger.debug(f"Failed to fetch comments for issue #{issue_number}: {e}")
+        return []
+
+    def is_waiting_for_user_response(self, issue_number: int) -> Tuple[bool, str]:
+        """Strict Anti-Spam Enforcement:
+        Checks whether this issue already has a pending autonomous update awaiting Luke's reply.
+        Returns (True, reason) if we must wait and NOT post again.
+        Returns (False, reason) if it's safe to post.
+        """
+        comments = self.get_issue_comments(issue_number)
+        if not comments:
+            return False, "No comments yet; safe to post initial update."
+
+        latest_comment = comments[-1]
+        author = latest_comment.get("author", {}).get("login", "").lower()
+        body = latest_comment.get("body", "")
+
+        is_adrastea_post = (
+            "[Adrastea Autonomous" in body
+            or "### [Adrastea" in body
+            or "ADRASTEA AUTONOMOUS SYSTEM REPORT" in body
+            or author in ("holman57[bot]", "github-actions[bot]")
+        )
+
+        if is_adrastea_post:
+            return True, f"Issue #{issue_number} is already waiting on a response from @{AUTHORIZED_OPERATOR}. Suppressing repeating posts."
+
+        if author == AUTHORIZED_OPERATOR:
+            return False, f"User response from @{AUTHORIZED_OPERATOR} detected; safe to respond."
+
+        return True, f"Issue #{issue_number} has pending state from non-operator. Suppressing."
+
+    def post_response_to_issue(self, issue_number: int, response_markdown: str, force: bool = False) -> Dict[str, Any]:
+        """Posts a response comment back to a specific issue thread, adhering strictly to anti-spam."""
+        if not force:
+            waiting, reason = self.is_waiting_for_user_response(issue_number)
+            if waiting:
+                logger.info(f"Suppressed duplicate post to issue #{issue_number}: {reason}")
+                return {"success": False, "suppressed": True, "issue_number": issue_number, "details": reason}
+
+        # Ensure autonomous update header is present for reliable state detection
+        if not response_markdown.startswith("### [Adrastea Autonomous Update]"):
+            body = f"### [Adrastea Autonomous Update]\n\n{response_markdown}"
+        else:
+            body = response_markdown
+
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "comment", str(issue_number), "--repo", self.repo, "--body", body],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if res.returncode == 0:
+                comment_url = res.stdout.strip()
+                logger.info(f"Dispatched response to Issue #{issue_number}: {comment_url}")
+                return {
+                    "success": True,
+                    "issue_number": issue_number,
+                    "details": f"Delivered to Issue #{issue_number} ({comment_url})",
+                }
+            return {
+                "success": False,
+                "issue_number": issue_number,
+                "details": res.stderr.strip() or "gh CLI non-zero exit",
+            }
+        except Exception as e:
+            return {"success": False, "issue_number": issue_number, "details": str(e)}
+
+    def post_goal_update(self, goal_id: str, update_markdown: str, force: bool = False) -> Dict[str, Any]:
+        """Post an update specifically to a goal's dedicated issue."""
+        issue_num = self.get_issue_for_goal(goal_id)
+        if not issue_num:
+            return {"success": False, "details": f"No active issue registered for goal [{goal_id}]"}
+        return self.post_response_to_issue(issue_num, update_markdown, force=force)
+
+    def post_or_create_discussion(
+        self,
+        topic_title: str,
+        body_markdown: str,
+        is_pulse_status: bool = False
+    ) -> Dict[str, Any]:
+        """Backward compatible helper for notifications routing."""
+        if is_pulse_status:
+            # System pulse thread is deprecated/closed; suppress general pulses to avoid static
+            logger.info("System pulse outreach skipped: Issue #1 closed to prevent spam.")
+            return {"success": False, "suppressed": True, "details": "Pulse thread closed."}
+
+        existing_num = self.find_topic_issue(topic_title)
+        if existing_num and existing_num != 1:
+            return self.post_response_to_issue(existing_num, body_markdown)
+        else:
+            new_issue_num = self.create_topic_issue(topic_title=topic_title, body_markdown=body_markdown)
+            if new_issue_num:
+                return {
+                    "success": True,
+                    "created": True,
+                    "issue_number": new_issue_num,
+                    "details": f"Created dedicated topic issue #{new_issue_num}: '{topic_title}'",
+                }
+            return {"success": False, "details": f"Failed to create new topic issue for '{topic_title}'"}
+
+
+# Alias for backward compatibility
+GitHubTopicManager = IssueCorrespondenceManager

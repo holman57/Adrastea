@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 from ..config import config
 from ..ipc.channel import IPCServer
 from ..ipc.protocol import Message, SignalType
+from ..knowledge.memory_manager import MemoryManager
+from .goals.manager import GoalManager
 from .local_llm import LocalLLMClient
 from .planner import RLPlanner
 from .runner import LocalProgramRunner, TaskExecutionResult
@@ -26,6 +28,8 @@ class AlphaEngine:
         self.scheduler = TaskScheduler(planner=self.planner)
         self.spawner = BetaSpawner(host=config.ipc_host, port=config.ipc_port)
         self.local_llm = LocalLLMClient(base_url=config.ollama_base_url, model=config.ollama_model)
+        self.memory = MemoryManager()
+        self.goal_manager = GoalManager()
 
         self._running = False
         self._sleeping = False
@@ -43,6 +47,8 @@ class AlphaEngine:
         self.ipc.register_handler(SignalType.SIG_DISPATCH, self._on_dispatch)
         self.ipc.register_handler(SignalType.SIG_MUTATE, self._on_mutate)
         self.ipc.register_handler(SignalType.SIG_TUNE_WEIGHTS, self._on_tune_weights)
+        self.ipc.register_handler(SignalType.SIG_TUNE_GOALS, self._on_tune_goals)
+        self.ipc.register_handler(SignalType.SIG_QUERY_GOALS, self._on_query_goals)
         self.ipc.register_handler(SignalType.SIG_QUERY_STATUS, self._on_query_status)
         self.ipc.register_handler(SignalType.SIG_SHUTDOWN, self._on_shutdown_signal)
         self.ipc.register_handler(SignalType.SIG_HEARTBEAT, self._on_heartbeat)
@@ -213,6 +219,31 @@ class AlphaEngine:
             )
         return None
 
+    async def _on_tune_goals(self, msg: Message) -> Optional[Message]:
+        goal_id = msg.payload.get("goal_id")
+        updates = msg.payload.get("updates", msg.payload)
+        logger.info(f"Received SIG_TUNE_GOALS from Beta for [{goal_id}]: {updates}")
+        if goal_id:
+            success = self.goal_manager.tune_goal(goal_id, updates)
+            return Message(
+                signal=SignalType.SIG_GOALS_STATUS,
+                sender="Alpha",
+                payload={
+                    "action": "goal_tuned",
+                    "goal_id": goal_id,
+                    "success": success,
+                    "status": self.goal_manager.get_goals_status()
+                }
+            )
+        return None
+
+    async def _on_query_goals(self, msg: Message) -> Message:
+        return Message(
+            signal=SignalType.SIG_GOALS_STATUS,
+            sender="Alpha",
+            payload=self.goal_manager.get_goals_status()
+        )
+
     async def _on_query_status(self, msg: Message) -> Message:
         return Message(
             signal=SignalType.SIG_TELEMETRY,
@@ -268,7 +299,9 @@ class AlphaEngine:
             "active_tasks": self.runner.list_active_tasks(),
             "scheduled_tasks_count": len(self.scheduler.tasks),
             "telemetry": self.planner.get_summary_telemetry(),
-            "local_llm_online": self.local_llm.is_available()
+            "local_llm_online": self.local_llm.is_available(),
+            "goals": self.goal_manager.get_goals_status(),
+            "knowledge_graph": self.memory.get_summary()
         }
 
     async def start(self) -> None:
@@ -323,7 +356,12 @@ class AlphaEngine:
                         )
                         continue
 
-                # Retrieve due tasks ordered by RL planner
+                # 1. Synthesize tasks from autonomous goals
+                new_goal_tasks = self.goal_manager.generate_due_tasks()
+                for gtask in new_goal_tasks:
+                    self.scheduler.register(gtask)
+
+                # 2. Retrieve due tasks ordered by RL planner
                 due_tasks = self.scheduler.get_due_tasks()
                 for task in due_tasks[:config.alpha_max_concurrent_tasks]:
                     # Execute in background or await
@@ -349,12 +387,32 @@ class AlphaEngine:
                 await asyncio.sleep(config.alpha_tick_interval)
 
     async def _run_task(self, task: ScheduledTask) -> None:
-        """Execute a scheduled task, evaluate RL score, and report to Beta."""
+        """Execute a scheduled task, evaluate RL score, record to memory, and report to Beta."""
         task.mark_executed()
         result: TaskExecutionResult = await self.runner.execute(task.task_id, task.command)
 
         # RL Planner evaluates outcome and computes reward
         reward = self.planner.record_outcome(result)
+
+        # Ingest execution into Knowledge Graph Memory
+        try:
+            self.memory.record_task_execution(
+                task_id=task.task_id,
+                command=task.command,
+                result={
+                    "exit_code": result.exit_code,
+                    "duration": result.duration_seconds,
+                    "stdout_sample": result.stdout[:200],
+                    "stderr_sample": result.stderr[:200],
+                }
+            )
+        except Exception as me:
+            logger.warning(f"Failed to record task execution to memory: {me}")
+
+        # Update Goal metrics if task originated from a goal
+        goal_id = task.metadata.get("goal_id")
+        if goal_id:
+            self.goal_manager.record_task_outcome(goal_id, result.is_success)
 
         # Notify Beta of task outcome
         sig = SignalType.SIG_TASK_COMPLETED if result.is_success else SignalType.SIG_TASK_FAILED

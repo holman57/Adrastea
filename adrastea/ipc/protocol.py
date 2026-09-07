@@ -25,7 +25,12 @@ class SignalType(str, Enum):
     SIG_DISPATCH = "SIG_DISPATCH"
     SIG_MUTATE = "SIG_MUTATE"
     SIG_TUNE_WEIGHTS = "SIG_TUNE_WEIGHTS"
+    SIG_TUNE_GOALS = "SIG_TUNE_GOALS"
+    SIG_QUERY_GOALS = "SIG_QUERY_GOALS"
     SIG_QUERY_STATUS = "SIG_QUERY_STATUS"
+
+    # Bidirectional Goals / Memory Telemetry
+    SIG_GOALS_STATUS = "SIG_GOALS_STATUS"
 
     # Speech Flow & Conversational Interface
     SIG_CONVERSATION = "SIG_CONVERSATION"

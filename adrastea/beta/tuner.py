@@ -1,18 +1,19 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from ..ipc.protocol import Message, SignalType
 
 logger = logging.getLogger("Adrastea.Beta.Tuner")
 
 
 class HeuristicTuner:
-    """Oversees Alpha's RL planner like a pathfinding cartographer and tunes scoring weights."""
+    """Oversees Alpha's RL planner and autonomous goal hierarchy, dynamically tuning weights and parameters."""
 
     def __init__(self):
         self.optimization_count = 0
+        self.goal_tuning_count = 0
 
     def evaluate_telemetry(self, telemetry: Dict[str, Any]) -> Optional[Message]:
-        """Analyze Alpha's performance telemetry and generate weight adjustments."""
+        """Analyze Alpha's performance telemetry and generate RL weight adjustments."""
         task_scores = telemetry.get("task_scores", {})
         total_exec = telemetry.get("total_executions", 0)
         total_fail = telemetry.get("total_failures", 0)
@@ -50,3 +51,80 @@ class HeuristicTuner:
             )
 
         return None
+
+    def evaluate_goals(
+        self,
+        telemetry: Dict[str, Any],
+        goals_data: Dict[str, Any],
+        recent_directive: Optional[str] = None
+    ) -> List[Message]:
+        """Cognitively tunes Alpha's autonomous goals based on operational context, stability, and directives."""
+        signals: List[Message] = []
+        goals = goals_data.get("goals", {})
+        if not goals:
+            return signals
+
+        # 1. Directive Steering: If Luke gave a directive mentioning a specific companion repo
+        if recent_directive:
+            directive_lower = recent_directive.lower()
+            for repo in ["speech-flow", "interpretive-interface", "distributed-content-management"]:
+                if repo in directive_lower or repo.replace("-", " ") in directive_lower:
+                    logger.info(f"Directive alignment: Steering ecosystem_repos goal to focus on [{repo}]")
+                    signals.append(
+                        Message(
+                            signal=SignalType.SIG_TUNE_GOALS,
+                            sender="Beta",
+                            payload={
+                                "goal_id": "ecosystem_repos",
+                                "weight": 2.5,
+                                "parameters": {"focus_repo": repo},
+                            }
+                        )
+                    )
+
+        # 2. Stability / Idle Compute Allocation:
+        # If Alpha is stable (low failures), boost companion ecosystem development and self-evolution
+        total_exec = telemetry.get("total_executions", 0)
+        total_fail = telemetry.get("total_failures", 0)
+        failure_rate = total_fail / max(1, total_exec)
+
+        if total_exec > 5 and failure_rate < 0.1:
+            eco_goal = goals.get("ecosystem_repos", {})
+            if eco_goal.get("weight", 1.0) < 1.6:
+                logger.info("Cognitive tuning: System stable. Boosting ecosystem_repos and self_evolution goals.")
+                signals.append(
+                    Message(
+                        signal=SignalType.SIG_TUNE_GOALS,
+                        sender="Beta",
+                        payload={"goal_id": "ecosystem_repos", "weight": 1.8}
+                    )
+                )
+                signals.append(
+                    Message(
+                        signal=SignalType.SIG_TUNE_GOALS,
+                        sender="Beta",
+                        payload={"goal_id": "adrastea_self_evolution", "weight": 1.5}
+                    )
+                )
+
+        # 3. Knowledge Graph Memory Consolidation Steering:
+        kg_goal = goals.get("knowledge_graph_memory", {})
+        # If tasks have executed heavily, accelerate memory consolidation interval
+        if total_exec > 20 and kg_goal.get("interval_seconds", 180.0) > 120.0:
+            logger.info("Cognitive tuning: High execution volume. Accelerating knowledge graph consolidation.")
+            signals.append(
+                Message(
+                    signal=SignalType.SIG_TUNE_GOALS,
+                    sender="Beta",
+                    payload={
+                        "goal_id": "knowledge_graph_memory",
+                        "interval_seconds": 90.0,
+                        "parameters": {"consolidation_decay_rate": 0.80}
+                    }
+                )
+            )
+
+        if signals:
+            self.goal_tuning_count += len(signals)
+
+        return signals

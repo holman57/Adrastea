@@ -86,7 +86,13 @@ class Notifier:
 
         return subject, plain_text, html_text
 
-    def notify_status(self, system_status: Dict[str, Any], custom_question: Optional[str] = None) -> Dict[str, Any]:
+    def notify_status(
+        self,
+        system_status: Dict[str, Any],
+        custom_question: Optional[str] = None,
+        topic_title: Optional[str] = None,
+        is_pulse: bool = True
+    ) -> Dict[str, Any]:
         """Dispatch notifications across all channels using ContactRelay."""
         question = custom_question or "System operational. What should Adrastea prioritize next?"
         subject, plain_text, _ = self.format_status_report(system_status, question)
@@ -95,7 +101,9 @@ class Notifier:
         outreach_results = self.relay.dispatch_all(
             subject=subject,
             body_text=plain_text,
-            custom_question=question
+            custom_question=question,
+            topic_title=topic_title,
+            is_pulse=is_pulse
         )
 
         delivered = any(res.get("success") for res in outreach_results.values())

@@ -86,9 +86,23 @@ class Config:
     twilio_auth_token: Optional[str] = os.getenv("TWILIO_AUTH_TOKEN", None)
     twilio_from_number: Optional[str] = os.getenv("TWILIO_FROM_NUMBER", None)
 
+    # Voice Notifications (Disabled by default; only active when speech-flow is running)
+    enable_voice_notifications: bool = os.getenv("ADRASTEA_ENABLE_VOICE", "false").lower() == "true"
+    speech_flow_port: int = int(os.getenv("SPEECH_FLOW_PORT", "7860"))
+
+    # Knowledge Base & Graph Database (Neo4j with embedded SQLite fallback)
+    neo4j_uri: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
+    neo4j_password: str = os.getenv("NEO4J_PASSWORD", "password")
+    knowledge_db_path: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent / "data" / "knowledge_graph.db")
+
+    # Companion AI Managed Repositories
+    companion_workspace_dir: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent.parent)
+
     def __post_init__(self):
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
+        self.knowledge_db_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 config = Config()

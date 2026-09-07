@@ -88,14 +88,97 @@ def cmd_test_llm():
     print(f"Consultant response: {cons_resp}")
 
 
+def cmd_goals():
+    from .alpha.goals.manager import GoalManager
+    gm = GoalManager()
+    status = gm.get_goals_status()
+    print("=== ADRASTEA AUTONOMOUS GOALS (SYSTEM ALPHA) ===")
+    print(f"Total Goals: {status['total_goals']} | Enabled: {status['enabled_goals']}\n")
+    for gid, g in status["goals"].items():
+        state = "ENABLED" if g["enabled"] else "DISABLED"
+        print(f"[{gid}] - {g['name']} ({state})")
+        print(f"  Description : {g['description']}")
+        print(f"  Weight      : {g['weight']} (Tweakable by Beta)")
+        print(f"  Interval    : {g['interval_seconds']}s")
+        print(f"  Parameters  : {g['parameters']}")
+        print(f"  Metrics     : {g['metrics']}\n")
+
+
+def cmd_knowledge():
+    from .knowledge.memory_manager import MemoryManager
+    mm = MemoryManager()
+    stats = mm.get_summary()
+    print("=== ADRASTEA KNOWLEDGE BASE & GRAPH MEMORY ===")
+    print(f"Backend           : {stats.get('backend')}")
+    print(f"Database File     : {stats.get('database_path')}")
+    print(f"Total Nodes       : {stats.get('total_nodes')}")
+    print(f"Total Edges       : {stats.get('total_relationships')}")
+    print(f"Memory Tiers      : {stats.get('tiers')}\n")
+    print("Sample Graph Nodes:")
+    for n in mm.store.query_nodes(limit=8):
+        print(f"  - [{n.tier.value}] {n.label} ({n.id}): {n.properties}")
+
+
+def cmd_issues(sync: bool = False):
+    from .notifications.issue_manager import IssueCorrespondenceManager
+    mgr = IssueCorrespondenceManager()
+    if sync:
+        print("Synchronizing and ensuring all goal and question issues on GitHub...")
+        res = mgr.ensure_all_issues()
+        if res.get("created"):
+            print(f"Created issues: {res['created']}")
+    else:
+        mgr.sync_registry()
+
+    reg = mgr.registry
+    print("=== ADRASTEA DECENTRALIZED GITHUB ISSUE THREADS ===")
+    print("\n--- Autonomous Goals ---")
+    for gid, gdata in reg.get("goals", {}).items():
+        num = gdata["issue_number"]
+        waiting, reason = mgr.is_waiting_for_user_response(num)
+        status_str = "WAITING ON LUKE (@holman57)" if waiting else "SAFE TO RESPOND / ACTIVE"
+        print(f"  Issue #{num:02d} | Goal: [{gid}]")
+        print(f"    Title  : {gdata['title']}")
+        print(f"    Status : {status_str}")
+        print(f"    URL    : https://github.com/{mgr.repo}/issues/{num}\n")
+
+    print("--- Architectural Questions ---")
+    for qid, qdata in reg.get("questions", {}).items():
+        num = qdata["issue_number"]
+        waiting, reason = mgr.is_waiting_for_user_response(num)
+        status_str = "WAITING ON LUKE (@holman57)" if waiting else "SAFE TO RESPOND / ACTIVE"
+        print(f"  Issue #{num:02d} | Question: [{qid}]")
+        print(f"    Title  : {qdata['title']}")
+        print(f"    Status : {status_str}")
+        print(f"    URL    : https://github.com/{mgr.repo}/issues/{num}\n")
+
+
+def cmd_directives():
+    from .directives import DirectiveWatcher
+    watcher = DirectiveWatcher()
+    directive = watcher.check_directives()
+    print("=== ADRASTEA DIRECTIVES CHECK ===")
+    if directive:
+        print("Directive DETECTED:")
+        print(f"  Text         : {directive.text}")
+        print(f"  Author       : {directive.author}")
+        print(f"  Source       : {directive.source}")
+        print(f"  Issue Number : {directive.issue_number}")
+        print(f"  Target Goal  : {directive.goal_id}")
+        print(f"  Topic        : {directive.topic}")
+    else:
+        print("No new directives found across DIRECTIVES.txt or monitored GitHub issues.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Adrastea Autonomous Orchestrator")
     parser.add_argument(
         "command",
-        choices=["start", "keepalive", "ping", "wake", "sleep", "notify", "test-llm", "status"],
+        choices=["start", "keepalive", "ping", "wake", "sleep", "notify", "test-llm", "status", "goals", "knowledge", "issues", "directives"],
         default="start",
         nargs="?"
     )
+    parser.add_argument("--sync", action="store_true", help="Sync/create all goal and question issues on GitHub")
     parser.add_argument("--sleep-interval", type=float, default=config.keepalive_sleep_seconds, help="Sleep duration in seconds for keep-alive")
     parser.add_argument("--duration", type=float, default=config.keepalive_sleep_seconds, help="Duration in seconds for sleep command")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose debug logging")
@@ -130,11 +213,25 @@ def main():
         cmd_notify()
     elif args.command == "test-llm":
         cmd_test_llm()
+    elif args.command == "goals":
+        cmd_goals()
+    elif args.command == "knowledge":
+        cmd_knowledge()
+    elif args.command == "issues":
+        cmd_issues(sync=args.sync)
+    elif args.command == "directives":
+        cmd_directives()
     elif args.command == "status":
         print(f"Target Email: {mask_sensitive_value(config.target_email)}")
         print(f"Target Phone: {mask_sensitive_value(config.target_phone)}")
         print(f"Ollama URL: {config.ollama_base_url}")
         print(f"IPC: {config.ipc_host}:{config.ipc_port}")
+        from .alpha.goals.manager import GoalManager
+        from .knowledge.memory_manager import MemoryManager
+        gm = GoalManager()
+        mm = MemoryManager()
+        print(f"Autonomous Goals: {len(gm.goals)} active")
+        print(f"Knowledge Graph: {mm.get_summary().get('total_nodes')} nodes, {mm.get_summary().get('total_relationships')} edges")
 
 
 if __name__ == "__main__":
