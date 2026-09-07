@@ -1,8 +1,36 @@
 # Adrastea
 
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white" alt="Python 3.10+"></a>
+  <a href="#architecture-overview"><img src="https://img.shields.io/badge/Architecture-Dual--Engine%20(Alpha%2FBeta)-6f42c1.svg" alt="Dual Engine"></a>
+  <a href="#local-environment--prerequisites"><img src="https://img.shields.io/badge/Inference-Ollama%20Local-black.svg?logo=ollama&logoColor=white" alt="Ollama Local"></a>
+  <a href="#2-system-beta--probabilistic-decision--reasoning-engine"><img src="https://img.shields.io/badge/Protocol-MCP%20Enabled-blueviolet.svg" alt="MCP Enabled"></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
+  <a href="https://github.com/holman57/Adrastea/stargazers"><img src="https://img.shields.io/github/stars/holman57/Adrastea?style=social" alt="GitHub Stars"></a>
+</p>
+
 **Adrastea** is a symbiotic dual-engine architecture designed for resilient, autonomous task orchestration and execution. It pairs a high-performance **deterministic execution engine (Alpha)** with a higher-order **probabilistic cognitive engine (Beta)**. 
 
 By separating deterministic execution from non-deterministic reasoning, Adrastea achieves high throughput and reliability while retaining the flexibility to adapt to unexpected environments, solve complex anomalies, and discover new workflows.
+
+---
+
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [Core Systems](#core-systems)
+  - [1. System Alpha — Deterministic Execution Engine](#1-system-alpha--deterministic-execution-engine)
+  - [2. System Beta — Probabilistic Decision & Reasoning Engine](#2-system-beta--probabilistic-decision--reasoning-engine)
+- [Inter-Process Communication (IPC) & Signaling](#inter-process-communication-ipc--signaling)
+  - [Control Signals](#control-signals)
+- [System Comparison](#system-comparison)
+- [Local Environment & Prerequisites](#local-environment--prerequisites)
+- [Keep-Alive & Long-Sleep Mode](#keep-alive--long-sleep-mode)
+- [CLI Usage](#cli-usage)
+- [Contributing](#contributing)
+- [Show Your Support](#show-your-support)
+- [License](#license)
 
 ---
 
@@ -191,6 +219,25 @@ python -m adrastea.cli sleep --duration 600
 # Wake sleeping Adrastea back to full active cycle
 python -m adrastea.cli wake
 ```
+
+---
+
+## Contributing
+
+Contributions, RFC proposals, and architectural discussions are warmly welcomed!
+
+1. **Fork the Repository** (`gh repo fork holman57/Adrastea` or via GitHub web).
+2. **Create a Feature Branch** (`git checkout -b feature/dynamic-mcp-tooling`).
+3. **Commit Your Changes** (`git commit -m 'feat: add streaming IPC buffer support'`).
+4. **Push & Open a Pull Request** against `main`.
+
+Please review [CONTRIBUTING.md](CONTRIBUTING.md) for architectural details on Alpha/Beta isolation.
+
+---
+
+## Show Your Support
+
+If you find the symbiotic dual-engine architecture interesting, please consider giving **Adrastea** a **⭐ Star** and **🍴 Forking** the repository!
 
 ---
 
