@@ -7,6 +7,7 @@ from .base import BaseGoal
 from .companion_feature_builder import CompanionFeatureBuilderGoal
 from .daily_github_commit import DailyGitHubCommitGoal
 from .ecosystem_repos import EcosystemReposGoal
+from .github_profile_promoter import GitHubProfilePromoterGoal
 from .knowledge_graph import KnowledgeGraphMemoryGoal
 from .self_evolution import AdrasteaSelfEvolutionGoal
 from .user_coordination import UserCoordinationGoal
@@ -29,6 +30,7 @@ class GoalManager:
         self.register_goal(KnowledgeGraphMemoryGoal())
         self.register_goal(DailyGitHubCommitGoal())
         self.register_goal(CompanionFeatureBuilderGoal())
+        self.register_goal(GitHubProfilePromoterGoal())
 
     def register_goal(self, goal: BaseGoal) -> None:
         self.goals[goal.goal_id] = goal

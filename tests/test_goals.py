@@ -28,13 +28,14 @@ class TestAlphaGoals(unittest.TestCase):
 
     def test_default_goals_registration(self):
         manager = GoalManager()
-        self.assertEqual(len(manager.goals), 6)
+        self.assertEqual(len(manager.goals), 7)
         self.assertIn("adrastea_self_evolution", manager.goals)
         self.assertIn("user_coordination", manager.goals)
         self.assertIn("ecosystem_repos", manager.goals)
         self.assertIn("knowledge_graph_memory", manager.goals)
         self.assertIn("daily_github_commit", manager.goals)
         self.assertIn("companion_feature_builder", manager.goals)
+        self.assertIn("github_profile_promoter", manager.goals)
 
     def test_self_evolution_goal_tasks(self):
         goal = AdrasteaSelfEvolutionGoal()

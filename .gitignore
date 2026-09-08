@@ -28,6 +28,7 @@ logs/
 *.sqlite3
 *.db
 adrastea.db
+data/
 
 # Testing & Coverage
 .pytest_cache/
