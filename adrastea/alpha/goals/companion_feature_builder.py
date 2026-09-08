@@ -175,6 +175,8 @@ def analyze_companion_repo(repo_name: str, workspace_dir: Optional[Path] = None)
             cwd=str(repo_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if b_res.returncode == 0:
             git_branch = b_res.stdout.strip()
@@ -184,6 +186,8 @@ def analyze_companion_repo(repo_name: str, workspace_dir: Optional[Path] = None)
             cwd=str(repo_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if st_res.returncode == 0:
             is_clean = not bool(st_res.stdout.strip())
@@ -193,6 +197,8 @@ def analyze_companion_repo(repo_name: str, workspace_dir: Optional[Path] = None)
             cwd=str(repo_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if log_res.returncode == 0:
             last_commit = log_res.stdout.strip()
@@ -240,6 +246,8 @@ def scan_and_converse_in_issues(
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=20,
         )
         if res.returncode == 0 and res.stdout.strip():
@@ -319,6 +327,8 @@ def scan_and_converse_in_issues(
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=20,
             )
             if create_res.returncode == 0:
@@ -372,6 +382,8 @@ def create_feature_branch_and_pr(
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         # 2. Stage modified files
@@ -383,6 +395,8 @@ def create_feature_branch_and_pr(
                     cwd=str(repo_dir),
                     check=True,
                     capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
 
         # 3. Commit
@@ -391,10 +405,18 @@ def create_feature_branch_and_pr(
             cwd=str(repo_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if commit_res.returncode != 0 and "nothing to commit" in commit_res.stdout:
             # Revert to base branch
-            subprocess.run(["git", "checkout", base_branch], cwd=str(repo_dir), capture_output=True)
+            subprocess.run(
+                ["git", "checkout", base_branch],
+                cwd=str(repo_dir),
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+            )
             return {"success": False, "error": "Nothing to commit for feature branch"}
 
         # 4. Push feature branch to origin
@@ -404,6 +426,8 @@ def create_feature_branch_and_pr(
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         # 5. Open Pull Request assigned to Luke
@@ -416,11 +440,24 @@ def create_feature_branch_and_pr(
             "--body", pr_body,
             "--assignee", assignee,
         ]
-        pr_res = subprocess.run(pr_cmd, capture_output=True, text=True, timeout=25)
+        pr_res = subprocess.run(
+            pr_cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=25,
+        )
         pr_url = pr_res.stdout.strip() if pr_res.returncode == 0 else ""
 
         # 6. Return back to base branch
-        subprocess.run(["git", "checkout", base_branch], cwd=str(repo_dir), capture_output=True)
+        subprocess.run(
+            ["git", "checkout", base_branch],
+            cwd=str(repo_dir),
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+        )
 
         logger.info(f"Created Pull Request for {repo_name}: {pr_url} (Assigned to @{assignee})")
         return {

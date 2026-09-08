@@ -248,6 +248,8 @@ def audit_github_profile_and_repos(user: str = TARGET_USER) -> Dict[str, Any]:
             ["gh", "api", f"users/{user}"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         u_data = json.loads(res.stdout)
@@ -276,6 +278,8 @@ def audit_github_profile_and_repos(user: str = TARGET_USER) -> Dict[str, Any]:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         repos = json.loads(res.stdout)
@@ -423,7 +427,14 @@ def post_or_update_growth_issue(
         "--json", "number,title,url",
     ]
     try:
-        res = subprocess.run(search_cmd, capture_output=True, text=True, check=True)
+        res = subprocess.run(
+            search_cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
         issues = json.loads(res.stdout) if res.stdout.strip() else []
     except Exception as e:
         logger.warning(f"Failed to query issues on {full_repo}: {e}")
@@ -457,12 +468,16 @@ def post_or_update_growth_issue(
                 ["gh", "issue", "edit", str(issue_number), "--repo", full_repo, "--body", summary_body],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=True,
             )
             subprocess.run(
                 ["gh", "issue", "comment", str(issue_number), "--repo", full_repo, "--body", markdown_content],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=True,
             )
             return {
@@ -486,7 +501,14 @@ def post_or_update_growth_issue(
             "--label", "enhancement",
         ]
         try:
-            res = subprocess.run(create_cmd, capture_output=True, text=True, check=True)
+            res = subprocess.run(
+                create_cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+            )
             created_url = res.stdout.strip()
             m = re.search(r"/issues/(\d+)", created_url)
             issue_number = int(m.group(1)) if m else None
@@ -506,7 +528,14 @@ def post_or_update_growth_issue(
                     "--body", markdown_content,
                     "--assignee", target_user,
                 ]
-                res = subprocess.run(create_cmd_no_label, capture_output=True, text=True, check=True)
+                res = subprocess.run(
+                    create_cmd_no_label,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=True,
+                )
                 created_url = res.stdout.strip()
                 m = re.search(r"/issues/(\d+)", created_url)
                 issue_number = int(m.group(1)) if m else None

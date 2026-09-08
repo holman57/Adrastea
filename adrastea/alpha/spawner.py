@@ -31,10 +31,14 @@ class BetaSpawner:
                 "--ipc-host", self.host,
                 "--ipc-port", str(self.port)
             ]
+            env = os.environ.copy()
+            env["PYTHONUTF8"] = "1"
+            env["PYTHONIOENCODING"] = "utf-8"
             self.process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
             self._running = True
             self._monitor_task = asyncio.create_task(self._supervise_beta())

@@ -24,6 +24,8 @@ def get_last_commit_info(repo_dir: Optional[Path] = None) -> Dict[str, Any]:
             cwd=str(root),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True
         )
         output = res.stdout.strip()
@@ -117,7 +119,9 @@ def run_daily_commit(
         ["git", "status", "--porcelain"] + files_to_track,
         cwd=str(root),
         capture_output=True,
-        text=True
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     has_tracked_changes = bool(status_res.stdout.strip())
 
@@ -149,7 +153,9 @@ def run_daily_commit(
                     ["git", "add", str(full_path)],
                     cwd=str(root),
                     check=True,
-                    capture_output=True
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
     except subprocess.CalledProcessError as e:
         logger.error(f"Git add failed: {e.stderr}")
@@ -163,7 +169,9 @@ def run_daily_commit(
         ["git", "commit", "-m", commit_msg],
         cwd=str(root),
         capture_output=True,
-        text=True
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     if commit_res.returncode != 0:
@@ -178,7 +186,9 @@ def run_daily_commit(
         ["git", "rev-parse", "HEAD"],
         cwd=str(root),
         capture_output=True,
-        text=True
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     commit_hash = hash_res.stdout.strip()
     logger.info(f"Committed daily sync {commit_hash[:7]}: '{commit_msg}'")
@@ -191,7 +201,9 @@ def run_daily_commit(
             ["git", "push", target_remote, target_branch],
             cwd=str(root),
             capture_output=True,
-            text=True
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if push_res.returncode != 0:
             logger.warning(f"Git push failed ({push_res.stderr.strip()}). Attempting rebase...")
@@ -200,14 +212,18 @@ def run_daily_commit(
                 ["git", "pull", "--rebase", target_remote, target_branch],
                 cwd=str(root),
                 capture_output=True,
-                text=True
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if rebase_res.returncode == 0:
                 retry_push = subprocess.run(
                     ["git", "push", target_remote, target_branch],
                     cwd=str(root),
                     capture_output=True,
-                    text=True
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 pushed = (retry_push.returncode == 0)
                 if not pushed:

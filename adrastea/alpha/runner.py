@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -41,11 +42,15 @@ class LocalProgramRunner:
         logger.info(f"Starting execution for [{task_id}]: {command}")
         try:
             # Using shell=True for flexible command / script execution on Windows
+            run_env = os.environ.copy()
+            run_env["PYTHONUTF8"] = "1"
+            run_env["PYTHONIOENCODING"] = "utf-8"
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                env=run_env,
             )
             self.active_processes[task_id] = proc
 
