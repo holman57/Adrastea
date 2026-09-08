@@ -142,6 +142,71 @@ Maintains Adrastea's multi-tiered memory architecture and graph-based semantic k
 Comment below with database preferences, query requests, or retention policy adjustments.
 """
     },
+    "daily_github_commit": {
+        "title": "[Goal] Daily GitHub Commit & Activity Synchronization",
+        "labels": ["goal", "autonomous", "git"],
+        "summary": "Guarantees Adrastea autonomously commits and pushes to GitHub at least once every day.",
+        "body": """### [Goal] Daily GitHub Commit & Activity Synchronization
+
+**Autonomous System Objective:**
+Guarantees Adrastea maintains an active public development pulse by synchronizing operational activity logs, milestone telemetry, and repository progress to GitHub at least once every day (every 24 hours).
+
+---
+
+### Operational Scope & Capabilities
+1. **Cadence Enforcement:** Evaluates repository commit history to ensure at least one commit occurs every 24-hour cycle or calendar day.
+2. **Activity & Progress Logging:** Stages verified operational logs from `ACTIVITY_LOG.md` or records a clean daily operational summary before committing.
+3. **Safe Staging:** Strictly scopes commits to tracked documentation and activity logs to prevent leakage of credentials or untracked temporary files.
+4. **Autonomous Remote Sync:** Automatically synchronizes and pushes changes to `origin/main`.
+
+---
+
+### Key Open Questions for Luke (@holman57)
+1. **Target Time of Day:** Do you have a preferred time of day (or UTC hour) for the daily commit to occur if no other commits have been made?
+2. **Additional Tracked Files:** Would you like other progress artifacts (e.g., benchmark summaries, knowledge graph exports) included in the daily commit?
+3. **Branch Policy:** Should daily commits continue to go directly to `main`, or would you prefer a dedicated daily progress branch (e.g., `daily-sync`)?
+
+---
+
+### How to Steer This Goal
+Reply directly to this issue with any cadence adjustments, branch preferences, or file inclusion requests.
+"""
+    },
+    "companion_feature_builder": {
+        "title": "[Goal] Companion Repositories Feature Builder & Autonomous Upgrade",
+        "labels": ["goal", "autonomous", "companion-repos", "pull-requests"],
+        "summary": "Routinely loops through distributed-content-management, interpretive-interface, speech-flow, hardcode, and market-research to build out features and open PRs assigned to Luke.",
+        "body": """### [Goal] Companion Repositories Feature Builder & Autonomous Upgrade
+
+**Autonomous System Objective:**
+Routinely analyzes, builds out, and upgrades companion repositories in `C:\\Users\\LukeH`:
+1. `distributed-content-management` (multi-niche automated content & monetization)
+2. `interpretive-interface` (Android 15 voice-first communicative interface)
+3. `speech-flow` (real-time audio visualizer & speech orchestration bridge)
+4. `hardcode` (flashcard syntax memorization system)
+5. `market-research` (web crawler & topic scoring engine)
+
+---
+
+### Operational Scope & Capabilities
+1. **Repository Objective Analysis:** Deeply inspects what each companion repository is trying to accomplish, auditing dependencies, architecture, and tests.
+2. **Feature Development & Upgrades:** Proactively formulates and implements new features, expanding capabilities and language coverage.
+3. **Branching & Pull Request Governance:** All very significant features or changes are developed on dedicated branches and submitted as Pull Requests assigned to Luke (@holman57).
+4. **Targeted Issue Inquiries & Conversations:** When Adrastea needs guidance or wants to know what to prioritize, it scans and converses directly within the issues of that respective repository (`holman57/<repo>`).
+
+---
+
+### Key Open Questions for Luke (@holman57)
+1. **Priority Ranking:** Which of the five companion repositories should receive the highest developmental attention right now?
+2. **Pull Request Review Workflow:** Do you prefer PRs opened as Drafts first, or ready for immediate review with automated test logs attached?
+3. **Feature Directives:** Are there specific feature roadmaps or components you want implemented in any of the companion repos?
+
+---
+
+### How to Steer This Goal
+Reply directly to this issue or mention any of the five repositories to steer focus, provide architectural direction, or approve proposed feature branches.
+"""
+    },
 }
 
 # Dedicated architectural question threads

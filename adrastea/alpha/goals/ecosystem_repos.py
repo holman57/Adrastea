@@ -24,9 +24,11 @@ class EcosystemReposGoal(BaseGoal):
             interval_seconds=360.0,
             parameters={
                 "target_repos": [
-                    "speech-flow",
-                    "interpretive-interface",
                     "distributed-content-management",
+                    "interpretive-interface",
+                    "speech-flow",
+                    "hardcode",
+                    "market-research",
                 ],
                 "focus_repo": None,  # If set, focuses tasks on this specific project
                 "auto_diagnose_tests": True,
@@ -96,6 +98,28 @@ class EcosystemReposGoal(BaseGoal):
                 f'has_gradle = (r / \'build.gradle.kts\').exists() or (r / \'build.gradle\').exists(); '
                 f'has_src = (r / \'src\').exists(); '
                 f'print(f\'INTERPRETIVE_INTERFACE_HEALTH: GradleConfig={{has_gradle}} | SourceTree={{has_src}}\')"'
+            )
+        elif target_repo == "hardcode":
+            # Flutter / Dart / python_driver check
+            cmd_diag = (
+                f'"{sys.executable}" -c '
+                f'"from pathlib import Path; '
+                f'r = Path(r\'{repo_dir}\'); '
+                f'has_pubspec = (r / \'pubspec.yaml\').exists(); '
+                f'has_db = (r / \'db_backup.json\').exists(); '
+                f'has_driver = (r / \'python_driver.py\').exists(); '
+                f'print(f\'HARDCODE_HEALTH: Pubspec={{has_pubspec}} | DBBackup={{has_db}} | Driver={{has_driver}}\')"'
+            )
+        elif target_repo == "market-research":
+            # Web crawler & topic scoring engine check
+            cmd_diag = (
+                f'"{sys.executable}" -c '
+                f'"from pathlib import Path; '
+                f'r = Path(r\'{repo_dir}\'); '
+                f'has_pkg = (r / \'pyproject.toml\').exists(); '
+                f'has_src = (r / \'market_research\').exists(); '
+                f'has_tests = (r / \'tests\').exists(); '
+                f'print(f\'MARKET_RESEARCH_HEALTH: PyProject={{has_pkg}} | SourceTree={{has_src}} | Tests={{has_tests}}\')"'
             )
         else:
             # distributed-content-management (scaffold / architecture readiness check)

@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from ..scheduler import ScheduledTask
 from .base import BaseGoal
+from .companion_feature_builder import CompanionFeatureBuilderGoal
+from .daily_github_commit import DailyGitHubCommitGoal
 from .ecosystem_repos import EcosystemReposGoal
 from .knowledge_graph import KnowledgeGraphMemoryGoal
 from .self_evolution import AdrasteaSelfEvolutionGoal
@@ -20,11 +22,13 @@ class GoalManager:
         self._register_default_goals()
 
     def _register_default_goals(self) -> None:
-        """Register the four foundational autonomous goals."""
+        """Register the foundational autonomous goals."""
         self.register_goal(AdrasteaSelfEvolutionGoal())
         self.register_goal(UserCoordinationGoal())
         self.register_goal(EcosystemReposGoal())
         self.register_goal(KnowledgeGraphMemoryGoal())
+        self.register_goal(DailyGitHubCommitGoal())
+        self.register_goal(CompanionFeatureBuilderGoal())
 
     def register_goal(self, goal: BaseGoal) -> None:
         self.goals[goal.goal_id] = goal

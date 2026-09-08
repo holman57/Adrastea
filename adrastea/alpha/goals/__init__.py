@@ -1,4 +1,6 @@
 from .base import BaseGoal
+from .companion_feature_builder import CompanionFeatureBuilderGoal
+from .daily_github_commit import DailyGitHubCommitGoal
 from .ecosystem_repos import EcosystemReposGoal
 from .knowledge_graph import KnowledgeGraphMemoryGoal
 from .manager import GoalManager
@@ -11,5 +13,7 @@ __all__ = [
     "UserCoordinationGoal",
     "EcosystemReposGoal",
     "KnowledgeGraphMemoryGoal",
+    "DailyGitHubCommitGoal",
+    "CompanionFeatureBuilderGoal",
     "GoalManager",
 ]

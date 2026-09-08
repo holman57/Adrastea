@@ -64,12 +64,12 @@ class HeuristicTuner:
         if not goals:
             return signals
 
-        # 1. Directive Steering: If Luke gave a directive mentioning a specific companion repo
+        # 1. Directive Steering: If Luke gave a directive mentioning a specific companion repo, daily commits, or feature building
         if recent_directive:
             directive_lower = recent_directive.lower()
-            for repo in ["speech-flow", "interpretive-interface", "distributed-content-management"]:
+            for repo in ["speech-flow", "interpretive-interface", "distributed-content-management", "hardcode", "market-research"]:
                 if repo in directive_lower or repo.replace("-", " ") in directive_lower:
-                    logger.info(f"Directive alignment: Steering ecosystem_repos goal to focus on [{repo}]")
+                    logger.info(f"Directive alignment: Steering companion goals to focus on [{repo}]")
                     signals.append(
                         Message(
                             signal=SignalType.SIG_TUNE_GOALS,
@@ -81,6 +81,30 @@ class HeuristicTuner:
                             }
                         )
                     )
+                    signals.append(
+                        Message(
+                            signal=SignalType.SIG_TUNE_GOALS,
+                            sender="Beta",
+                            payload={
+                                "goal_id": "companion_feature_builder",
+                                "weight": 2.8,
+                                "parameters": {"focus_repo": repo},
+                            }
+                        )
+                    )
+            if any(k in directive_lower for k in ["daily commit", "github commit", "commit everyday", "commit every day", "commit daily"]):
+                logger.info("Directive alignment: Boosting daily_github_commit goal priority.")
+                signals.append(
+                    Message(
+                        signal=SignalType.SIG_TUNE_GOALS,
+                        sender="Beta",
+                        payload={
+                            "goal_id": "daily_github_commit",
+                            "weight": 2.5,
+                            "parameters": {"force_commit": True}
+                        }
+                    )
+                )
 
         # 2. Stability / Idle Compute Allocation:
         # If Alpha is stable (low failures), boost companion ecosystem development and self-evolution
