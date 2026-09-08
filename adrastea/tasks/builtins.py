@@ -55,4 +55,21 @@ def get_default_scheduled_tasks() -> List[ScheduledTask]:
         )
     )
 
+    # 4. Daily Cultural Zeitgeist Radar Task (Runs daily / every 24 hours)
+    cmd_zeitgeist = (
+        f'"{sys.executable}" -m market_research.inquiry.zeitgeist_radar --sync'
+    )
+    tasks.append(
+        ScheduledTask(
+            task_id="market_research_daily_zeitgeist",
+            command=cmd_zeitgeist,
+            interval_seconds=86400.0,  # 24 hours (everyday)
+            priority=25,
+            metadata={
+                "description": "Daily synchronization of cultural zeitgeist radar issue on holman57/market-research",
+                "target_repo": "market-research",
+            }
+        )
+    )
+
     return tasks

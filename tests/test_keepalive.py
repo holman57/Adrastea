@@ -110,7 +110,10 @@ class TestKeepAlive(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp.payload.get("action"), "dispatched")
 
         # Give the event loop a brief moment to wake Alpha and execute the task
-        await asyncio.sleep(0.5)
+        for _ in range(25):
+            if not alpha._sleeping and alpha.planner.get_or_create_metrics("wake_and_run_task").execution_count >= 1:
+                break
+            await asyncio.sleep(0.1)
 
         # Alpha should now be awake and the task recorded by the RL planner
         self.assertFalse(alpha._sleeping)
