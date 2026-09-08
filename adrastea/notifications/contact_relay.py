@@ -113,9 +113,27 @@ class ContactRelay:
         body_text: str,
         custom_question: str,
         topic_title: Optional[str] = None,
-        is_pulse: bool = True
+        is_pulse: bool = True,
+        force: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
-        """Dispatch notifications across every possible communication channel."""
+        """Dispatch notifications across communication channels, adhering strictly to wait-for-response."""
+        target_issue = 1
+        if topic_title and not is_pulse:
+            found = self.topic_mgr.find_topic_issue(topic_title)
+            if found:
+                target_issue = found
+
+        waiting, reason = self.topic_mgr.is_waiting_for_user_response(target_issue)
+        if not force and waiting:
+            logger.info(f"Outreach suppressed across all channels: {reason}")
+            return {
+                "github_verified_email": {"success": False, "suppressed": True, "issue_number": target_issue, "details": reason},
+                "desktop_voice": {"success": False, "suppressed": True, "details": "Suppressed: awaiting user response"},
+                "desktop_balloon": {"success": False, "suppressed": True, "details": "Suppressed: awaiting user response"},
+                "direct_email": {"success": False, "suppressed": True, "details": "Suppressed: awaiting user response"},
+                "sms_carrier": {"success": False, "suppressed": True, "details": "Suppressed: awaiting user response"},
+            }
+
         results: Dict[str, Dict[str, Any]] = {}
 
         # Channel 1: GitHub Verified Email & Mobile App Notification Relay

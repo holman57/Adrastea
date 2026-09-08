@@ -19,10 +19,12 @@ class TestIssueManagerAndSecurity(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.directives_file = Path(self.temp_dir.name) / "DIRECTIVES.txt"
         self.registry_file = Path(self.temp_dir.name) / "issue_registry.json"
+        self.seen_comments_file = Path(self.temp_dir.name) / "processed_directives.json"
         self.topic_mgr = IssueCorrespondenceManager(repo="holman57/Adrastea", registry_file=self.registry_file)
         self.watcher = DirectiveWatcher(
             directives_file=self.directives_file,
-            correspondence_manager=self.topic_mgr
+            correspondence_manager=self.topic_mgr,
+            seen_comments_file=self.seen_comments_file,
         )
 
     def tearDown(self):
@@ -154,6 +156,56 @@ class TestIssueManagerAndSecurity(unittest.TestCase):
         self.assertIsNotNone(target)
         self.assertEqual(target["id"], "ecosystem_repos")
         self.assertEqual(target["type"], "goal")
+
+    @patch("subprocess.run")
+    def test_persistent_seen_comments_prevents_duplicate_processing(self, mock_subproc):
+        # Comments list where Luke responded
+        mock_subproc.return_value = MagicMock(
+            returncode=0,
+            stdout='''{
+                "comments": [
+                    {"id": "c_unique_101", "author": {"login": "holman57"}, "body": "Do something new"}
+                ]
+            }'''
+        )
+        with patch.object(self.watcher, "_get_monitored_issue_numbers", return_value=[4]):
+            d1 = self.watcher.check_github_issue_directive()
+            self.assertIsNotNone(d1)
+            self.assertEqual(d1, "Do something new")
+
+            # Second check with same comment: must be suppressed (None)
+            d2 = self.watcher.check_github_issue_directive()
+            self.assertIsNone(d2)
+
+        # Re-instantiate watcher pointing to same seen_comments_file: must still be suppressed
+        watcher_restart = DirectiveWatcher(
+            directives_file=self.directives_file,
+            correspondence_manager=self.topic_mgr,
+            seen_comments_file=self.watcher.seen_comments_file
+        )
+        with patch.object(watcher_restart, "_get_monitored_issue_numbers", return_value=[4]):
+            d_restarted = watcher_restart.check_github_issue_directive()
+            self.assertIsNone(d_restarted)
+
+    @patch("subprocess.run")
+    def test_subsequent_adrastea_reply_suppresses_old_directive(self, mock_subproc):
+        # Issue where Luke posted a directive, but Adrastea already replied later in the thread
+        mock_subproc.return_value = MagicMock(
+            returncode=0,
+            stdout='''{
+                "comments": [
+                    {"id": "c_old_1", "author": {"login": "holman57"}, "body": "Old instruction"},
+                    {"id": "c_reply_1", "author": {"login": "holman57"}, "body": "### [Adrastea Autonomous Update] Adopted directive..."},
+                    {"id": "c_new_2", "author": {"login": "holman57"}, "body": "Fresh instruction"}
+                ]
+            }'''
+        )
+        with patch.object(self.watcher, "_get_monitored_issue_numbers", return_value=[4]):
+            d = self.watcher.check_github_issue_directive()
+            # Must return the NEW instruction (c_new_2), skipping the already-replied c_old_1
+            self.assertIsNotNone(d)
+            self.assertEqual(d, "Fresh instruction")
+            self.assertEqual(d.raw_comment_id, "c_new_2")
 
 
 if __name__ == "__main__":

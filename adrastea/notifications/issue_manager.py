@@ -299,6 +299,8 @@ class IssueCorrespondenceManager:
                 ["gh", "issue", "list", "--repo", self.repo, "--state", "open", "--json", "number,title,labels,updatedAt"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=15,
             )
             if res.returncode == 0 and res.stdout.strip():
@@ -376,7 +378,14 @@ class IssueCorrespondenceManager:
                 for l in labels:
                     cmd.extend(["--label", l])
 
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=20,
+            )
             if res.returncode == 0:
                 output_url = res.stdout.strip()
                 logger.info(f"Created dedicated topic issue: {output_url}")
@@ -457,6 +466,8 @@ class IssueCorrespondenceManager:
                 ["gh", "issue", "view", str(issue_number), "--repo", self.repo, "--json", "state"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             if res.returncode == 0 and res.stdout.strip():
@@ -484,6 +495,8 @@ class IssueCorrespondenceManager:
                 ["gh", "issue", "view", str(issue_number), "--repo", self.repo, "--json", "comments"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=15,
             )
             if res.returncode == 0 and res.stdout.strip():
@@ -511,6 +524,9 @@ class IssueCorrespondenceManager:
             "[Adrastea Autonomous" in body
             or "### [Adrastea" in body
             or "ADRASTEA AUTONOMOUS SYSTEM REPORT" in body
+            or "Generated automatically by" in body
+            or "Growth & Star Acceleration Blueprint" in body
+            or "Adrastea GitHub Profile" in body
             or author in ("holman57[bot]", "github-actions[bot]")
         )
 
@@ -541,6 +557,8 @@ class IssueCorrespondenceManager:
                 ["gh", "issue", "comment", str(issue_number), "--repo", self.repo, "--body", body],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=15,
             )
             if res.returncode == 0:

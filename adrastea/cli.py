@@ -55,6 +55,17 @@ async def run_orchestrator():
 
 
 def cmd_notify():
+    import datetime
+    from .beta.delivery_strategist import DeliveryStrategist
+    strategist = DeliveryStrategist()
+    if not strategist.should_attempt_contact():
+        print(json.dumps({
+            "timestamp": datetime.datetime.now().isoformat(),
+            "suppressed": True,
+            "details": "System is waiting on user response. Suppressing repeat notification.",
+        }, indent=2))
+        return
+
     notifier = Notifier()
     status = {
         "uptime_seconds": 0,
@@ -70,6 +81,7 @@ def cmd_notify():
         "3. Stand by for interactive tasks"
     )
     result = notifier.notify_status(status, custom_question=question)
+    strategist.mark_contact_attempted()
     print(json.dumps(result, indent=2))
 
 

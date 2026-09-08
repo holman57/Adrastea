@@ -197,9 +197,12 @@ class BetaEngine:
                             resp = self.watcher.correspondence_manager.post_response_to_issue(
                                 issue_number=issue_num,
                                 response_markdown=reply_markdown,
-                                force=True,
+                                force=False,
                             )
-                            logger.info(f"Dispatched correspondence reply to Issue #{issue_num}: {resp.get('details')}")
+                            if resp.get("suppressed"):
+                                logger.info(f"Duplicate reply suppressed for Issue #{issue_num}: {resp.get('details')}")
+                            else:
+                                logger.info(f"Dispatched correspondence reply to Issue #{issue_num}: {resp.get('details')}")
                         except Exception as e:
                             logger.error(f"Failed to post correspondence reply to Issue #{issue_num}: {e}")
 

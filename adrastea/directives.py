@@ -68,6 +68,7 @@ class DirectiveWatcher:
         directives_file: Optional[Path] = None,
         default_issue_number: Optional[int] = None,
         correspondence_manager: Optional[Any] = None,
+        seen_comments_file: Optional[Path] = None,
     ):
         self.directives_file = directives_file or (config.root_dir / "DIRECTIVES.txt")
         self.default_issue_number = default_issue_number
@@ -78,9 +79,33 @@ class DirectiveWatcher:
             from .notifications.issue_manager import IssueCorrespondenceManager
             self.correspondence_manager = IssueCorrespondenceManager()
 
+        self.seen_comments_file = seen_comments_file or (config.data_dir / "processed_directives.json")
         self.seen_comment_ids: Set[str] = set()
         self.last_seen_comment_id: Optional[str] = None
+        self._load_seen_comments()
         self._ensure_directives_file()
+
+    def _load_seen_comments(self) -> None:
+        """Load already processed comment IDs from disk to prevent duplicate responses across restarts."""
+        if self.seen_comments_file.exists():
+            try:
+                with open(self.seen_comments_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        self.seen_comment_ids = set(data)
+                    elif isinstance(data, dict):
+                        self.seen_comment_ids = set(data.get("seen_comment_ids", []))
+            except Exception as e:
+                logger.debug(f"Failed to load processed comments: {e}")
+
+    def _save_seen_comments(self) -> None:
+        """Persist processed comment IDs to disk."""
+        try:
+            self.seen_comments_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.seen_comments_file, "w", encoding="utf-8") as f:
+                json.dump({"seen_comment_ids": sorted(list(self.seen_comment_ids))}, f, indent=2)
+        except Exception as e:
+            logger.debug(f"Failed to save processed comments: {e}")
 
     def _ensure_directives_file(self) -> None:
         if not self.directives_file.exists():
@@ -147,43 +172,83 @@ class DirectiveWatcher:
         """Check for user replies or comments on GitHub issues.
         Strictly enforces that ONLY comments from @holman57 are accepted.
         Resolves the corresponding goal or question topic for the issue.
+        Avoids replaying old comments or posting duplicate responses.
         """
         issues_to_check = self._get_monitored_issue_numbers()
 
         for issue_num in issues_to_check:
             try:
+                # 1. Check if this issue is already waiting on Luke.
+                # If Adrastea already posted the latest comment, suppress re-reading older comments.
+                waiting, _ = self.correspondence_manager.is_waiting_for_user_response(issue_num)
+                if waiting:
+                    # Mark all existing comments on this waiting thread as seen so they are never re-evaluated
+                    comments = self.correspondence_manager.get_issue_comments(issue_num)
+                    updated = False
+                    for c in comments:
+                        cid = c.get("id")
+                        if cid and cid not in self.seen_comment_ids:
+                            self.seen_comment_ids.add(cid)
+                            updated = True
+                    if updated:
+                        self._save_seen_comments()
+                    continue
+
                 comments = self.correspondence_manager.get_issue_comments(issue_num)
                 if not comments:
                     continue
 
-                for comment in comments:
+                for idx, comment in enumerate(comments):
                     comment_id = comment.get("id")
                     author = comment.get("author", {}).get("login", "").strip().lower()
                     body = comment.get("body", "").strip()
 
+                    if not comment_id:
+                        continue
+
                     # Check if already processed
                     if comment_id in self.seen_comment_ids:
                         continue
-
-                    self.seen_comment_ids.add(comment_id)
-                    self.last_seen_comment_id = comment_id
 
                     # Ignore bot/autonomous comments
                     if (
                         "[Adrastea Autonomous" in body
                         or "### [Adrastea" in body
                         or "ADRASTEA AUTONOMOUS SYSTEM REPORT" in body
+                        or "Generated automatically by" in body
+                        or "Growth & Star Acceleration Blueprint" in body
+                        or "Adrastea GitHub Profile" in body
                         or author in ("github-actions[bot]", "holman57[bot]")
                     ):
+                        self.seen_comment_ids.add(comment_id)
+                        self._save_seen_comments()
                         continue
 
                     # STRICT SECURITY: Only accept comments from AUTHORIZED_DIRECTIVE_AUTHOR (holman57)
                     if author != AUTHORIZED_DIRECTIVE_AUTHOR:
+                        self.seen_comment_ids.add(comment_id)
                         logger.warning(
                             f"Security: Ignored comment {comment_id} on issue #{issue_num} from unauthorized user '@{author}'. "
                             f"Only @{AUTHORIZED_DIRECTIVE_AUTHOR} is permitted to give instructions."
                         )
                         continue
+
+                    # Check if any subsequent comment is already an Adrastea reply for this directive
+                    has_subsequent_adrastea_reply = any(
+                        "[Adrastea Autonomous" in n_c.get("body", "")
+                        or "### [Adrastea" in n_c.get("body", "")
+                        or "ADRASTEA AUTONOMOUS SYSTEM REPORT" in n_c.get("body", "")
+                        for n_c in comments[idx + 1:]
+                    )
+                    if has_subsequent_adrastea_reply:
+                        self.seen_comment_ids.add(comment_id)
+                        self._save_seen_comments()
+                        continue
+
+                    # Found a genuinely new, unreplied directive from Luke
+                    self.seen_comment_ids.add(comment_id)
+                    self.last_seen_comment_id = comment_id
+                    self._save_seen_comments()
 
                     # Target goal or question lookup
                     target_info = self.correspondence_manager.get_target_for_issue(issue_num)
