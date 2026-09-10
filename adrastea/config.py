@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 
 def load_dotenv(dotenv_path: Optional[Path] = None) -> None:
@@ -103,6 +103,18 @@ class Config:
 
     # Companion AI Managed Repositories
     companion_workspace_dir: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent.parent)
+    target_repositories: List[str] = field(default_factory=lambda: (
+        [r.strip() for r in os.getenv("ADRASTEA_TARGET_REPOS", "").split(",") if r.strip()]
+        if os.getenv("ADRASTEA_TARGET_REPOS")
+        else [
+            "holman57/Adrastea",
+            "holman57/hardcode",
+            "holman57/speech-flow",
+            "holman57/market-research",
+            "holman57/interpretive-interface",
+            "holman57/distributed-content-management",
+        ]
+    ))
 
     def __post_init__(self):
         self.data_dir.mkdir(parents=True, exist_ok=True)

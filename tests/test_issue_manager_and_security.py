@@ -310,6 +310,106 @@ class TestIssueManagerAndSecurity(unittest.TestCase):
             mock_mem.return_value = MagicMock(percent=90.0)
             self.assertEqual(self.watcher.get_adaptive_interval(), 3600.0)
 
+    def test_multi_repo_directive_detection_and_queueing(self):
+        # Configure watcher for multiple repositories
+        multi_watcher = DirectiveWatcher(
+            directives_file=self.directives_file,
+            seen_comments_file=self.seen_comments_file,
+            target_repos=["holman57/Adrastea", "holman57/hardcode"],
+        )
+
+        mock_mgr_adrastea = MagicMock()
+        mock_mgr_adrastea.repo = "holman57/Adrastea"
+        mock_mgr_adrastea.list_open_issues.return_value = [{"number": 9}]
+        mock_mgr_adrastea.get_issue_data.return_value = {
+            "number": 9,
+            "title": "Adrastea Core Task",
+            "body": "Optimize cognitive loop",
+            "author": {"login": "holman57"},
+            "comments": [],
+        }
+        mock_mgr_adrastea.is_adrastea_content.return_value = False
+        mock_mgr_adrastea.is_waiting_for_user_response.return_value = (False, "")
+
+        mock_mgr_hardcode = MagicMock()
+        mock_mgr_hardcode.repo = "holman57/hardcode"
+        mock_mgr_hardcode.list_open_issues.return_value = [{"number": 4}]
+        mock_mgr_hardcode.get_issue_data.return_value = {
+            "number": 4,
+            "title": "Roadmap RFC",
+            "body": "RFC Body",
+            "author": {"login": "holman57"},
+            "comments": [
+                {"id": "hc_c1", "author": {"login": "holman57"}, "body": "Add SM-2 algorithm"}
+            ],
+        }
+        mock_mgr_hardcode.is_adrastea_content.return_value = False
+        mock_mgr_hardcode.is_waiting_for_user_response.return_value = (False, "")
+
+        def fake_get_mgr(repo):
+            if repo == "holman57/hardcode":
+                return mock_mgr_hardcode
+            return mock_mgr_adrastea
+
+        with patch.object(multi_watcher, "get_correspondence_manager", side_effect=fake_get_mgr):
+            # First tick: should return directive 1 from holman57/Adrastea
+            d1 = multi_watcher.check_directives(force=True)
+            self.assertIsNotNone(d1)
+            self.assertEqual(d1.repo, "holman57/Adrastea")
+            self.assertEqual(d1.issue_number, 9)
+
+            # Second tick: should drain directive 2 (issue body) from holman57/hardcode
+            d2 = multi_watcher.check_directives(force=False)
+            self.assertIsNotNone(d2)
+            self.assertEqual(d2.repo, "holman57/hardcode")
+            self.assertEqual(d2.issue_number, 4)
+            self.assertEqual(d2.goal_id, "companion_feature_builder")
+            self.assertIn("Roadmap RFC", d2.text)
+
+            # Third tick: should drain directive 3 (comment) from holman57/hardcode
+            d3 = multi_watcher.check_directives(force=False)
+            self.assertIsNotNone(d3)
+            self.assertEqual(d3.repo, "holman57/hardcode")
+            self.assertEqual(d3.issue_number, 4)
+            self.assertEqual(d3.goal_id, "companion_feature_builder")
+            self.assertIn("Add SM-2 algorithm", d3.text)
+
+            # Fourth tick: queue is empty, no directives pending
+            d4 = multi_watcher.check_directives(force=False)
+            self.assertIsNone(d4)
+
+    @patch("subprocess.run")
+    def test_scan_and_converse_in_issues_actively_replies(self, mock_subproc):
+        from adrastea.alpha.goals.companion_feature_builder import scan_and_converse_in_issues
+
+        # Mock gh issue list returning an issue with a comment from Luke
+        mock_subproc.side_effect = [
+            # 1. gh issue list
+            MagicMock(
+                returncode=0,
+                stdout=json.dumps([
+                    {
+                        "number": 2,
+                        "title": "Expand topics and definitions",
+                        "body": "Issue body",
+                        "author": {"login": "holman57"},
+                        "comments": [
+                            {"id": "c1", "author": {"login": "holman57"}, "body": "Add new question types"}
+                        ],
+                    }
+                ]),
+            ),
+            # 2. gh issue comment (response)
+            MagicMock(returncode=0, stdout="https://github.com/holman57/hardcode/issues/2#issuecomment-999"),
+        ]
+
+        res = scan_and_converse_in_issues("hardcode", auto_ask=False)
+        self.assertTrue(res["success"])
+        self.assertEqual(res["repo"], "holman57/hardcode")
+        self.assertEqual(len(res["operator_guidance"]), 1)
+        self.assertIn("replied_to_guidance_#2", res["actions_taken"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

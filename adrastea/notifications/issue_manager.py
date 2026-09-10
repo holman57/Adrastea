@@ -539,21 +539,29 @@ class IssueCorrespondenceManager:
             logger.debug(f"Failed to fetch issue #{issue_number} data: {e}")
             return None
 
+    def _wait_key(self, issue_number: int) -> str:
+        if self.repo and self.repo != "holman57/Adrastea":
+            return f"{self.repo}#{issue_number}"
+        return str(issue_number)
+
     def get_issue_wait_duration(self, issue_number: int) -> float:
         """Returns required wait duration in seconds for an issue based on how many times Adrastea has asked."""
-        state = self.wait_states.get(str(issue_number), {})
+        key = self._wait_key(issue_number)
+        state = self.wait_states.get(key) or self.wait_states.get(str(issue_number), {})
         wait_count = state.get("wait_count", 0)
         days = min(WAIT_MAX_DAYS, WAIT_BASE_DAYS * (2 ** wait_count))
         return days * 86400.0
 
     def get_wait_count(self, issue_number: int) -> int:
         """Get the current follow-up count for an issue."""
-        return self.wait_states.get(str(issue_number), {}).get("wait_count", 0)
+        key = self._wait_key(issue_number)
+        state = self.wait_states.get(key) or self.wait_states.get(str(issue_number), {})
+        return state.get("wait_count", 0)
 
     def record_adrastea_inquiry(self, issue_number: int) -> None:
         """Record that Adrastea posted a question/update, escalating the wait count for subsequent checks."""
-        key = str(issue_number)
-        current_count = self.wait_states.get(key, {}).get("wait_count", 0)
+        key = self._wait_key(issue_number)
+        current_count = self.get_wait_count(issue_number)
         self.wait_states[key] = {
             "wait_count": current_count + 1,
             "last_ask_timestamp": time.time(),
@@ -563,17 +571,18 @@ class IssueCorrespondenceManager:
 
     def reset_issue_wait(self, issue_number: int) -> None:
         """Reset wait state when the authorized operator (@holman57) responds."""
-        key = str(issue_number)
-        if key in self.wait_states:
-            self.wait_states[key]["wait_count"] = 0
-            self.wait_states[key]["last_ask_timestamp"] = 0.0
-            self.registry["wait_states"] = self.wait_states
-            self._save_registry()
+        key = self._wait_key(issue_number)
+        for k in (key, str(issue_number)):
+            if k in self.wait_states:
+                self.wait_states[k]["wait_count"] = 0
+                self.wait_states[k]["last_ask_timestamp"] = 0.0
+        self.registry["wait_states"] = self.wait_states
+        self._save_registry()
 
     def _check_wait_timeout(self, issue_number: int, latest_comment_or_created: Optional[Any] = None) -> Tuple[bool, str]:
         """Calculates whether the escalating backoff wait duration has elapsed since Adrastea's last comment."""
-        key = str(issue_number)
-        state = self.wait_states.get(key)
+        key = self._wait_key(issue_number)
+        state = self.wait_states.get(key) or self.wait_states.get(str(issue_number))
         last_ask_ts = state.get("last_ask_timestamp", 0.0) if state else 0.0
 
         if last_ask_ts <= 0.0 and latest_comment_or_created:
@@ -677,21 +686,28 @@ class IssueCorrespondenceManager:
         author = latest_comment.get("author", {}).get("login", "").lower()
         body = latest_comment.get("body", "")
 
+        if is_adrastea_content(body, author):
+            return self._check_wait_timeout(issue_number, latest_comment)
+
         if author == AUTHORIZED_OPERATOR.lower():
             self.reset_issue_wait(issue_number)
             return False, f"User response from @{AUTHORIZED_OPERATOR} detected; safe to respond."
 
-        if is_adrastea_content(body, author):
-            return self._check_wait_timeout(issue_number, latest_comment)
-
         return False, f"External comment from @{author} detected."
 
-    def post_response_to_issue(self, issue_number: int, response_markdown: str, force: bool = False) -> Dict[str, Any]:
+    def post_response_to_issue(
+        self,
+        issue_number: int,
+        response_markdown: str,
+        force: bool = False,
+        repo: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Posts a response comment back to a specific issue thread, adhering strictly to anti-spam."""
+        target_repo = repo or self.repo
         if not force:
             waiting, reason = self.is_waiting_for_user_response(issue_number)
             if waiting:
-                logger.info(f"Suppressed duplicate post to issue #{issue_number}: {reason}")
+                logger.info(f"Suppressed duplicate post to issue #{issue_number} on {target_repo}: {reason}")
                 return {"success": False, "suppressed": True, "issue_number": issue_number, "details": reason}
 
         # Ensure autonomous update header is present for reliable state detection
@@ -702,7 +718,7 @@ class IssueCorrespondenceManager:
 
         try:
             res = subprocess.run(
-                ["gh", "issue", "comment", str(issue_number), "--repo", self.repo, "--body", body],
+                ["gh", "issue", "comment", str(issue_number), "--repo", target_repo, "--body", body],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -711,12 +727,12 @@ class IssueCorrespondenceManager:
             )
             if res.returncode == 0:
                 comment_url = res.stdout.strip()
-                logger.info(f"Dispatched response to Issue #{issue_number}: {comment_url}")
+                logger.info(f"Dispatched response to Issue #{issue_number} on {target_repo}: {comment_url}")
                 self.record_adrastea_inquiry(issue_number)
                 return {
                     "success": True,
                     "issue_number": issue_number,
-                    "details": f"Delivered to Issue #{issue_number} ({comment_url})",
+                    "details": f"Delivered to Issue #{issue_number} on {target_repo} ({comment_url})",
                 }
             return {
                 "success": False,

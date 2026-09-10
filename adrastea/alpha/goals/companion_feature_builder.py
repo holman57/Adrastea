@@ -225,7 +225,7 @@ def scan_and_converse_in_issues(
     auto_ask: bool = True
 ) -> Dict[str, Any]:
     """Scans open issues in the companion repository (holman57/<repo>), reads Luke's guidance,
-    and posts targeted inquiries/questions when guidance is needed.
+    and posts targeted inquiries/responses when guidance is needed or provided.
     """
     spec = COMPANION_REPO_SPECS.get(repo_name)
     if not spec:
@@ -233,6 +233,9 @@ def scan_and_converse_in_issues(
 
     github_repo = spec["github_repo"]
     logger.info(f"Scanning issues for {github_repo}...")
+
+    from ...notifications.issue_manager import IssueCorrespondenceManager
+    mgr = IssueCorrespondenceManager(repo=github_repo)
 
     # Step 1: List open issues in this repo
     open_issues: List[Dict[str, Any]] = []
@@ -242,7 +245,7 @@ def scan_and_converse_in_issues(
                 "gh", "issue", "list",
                 "--repo", github_repo,
                 "--state", "open",
-                "--json", "number,title,labels,updatedAt,comments"
+                "--json", "number,title,labels,updatedAt,comments,body,author"
             ],
             capture_output=True,
             text=True,
@@ -258,22 +261,35 @@ def scan_and_converse_in_issues(
 
     # Step 2: Check for existing operator instructions or conversations
     operator_guidance: List[Dict[str, Any]] = []
+    actions_taken: List[str] = []
     waiting_on_operator = False
     existing_guidance_issue: Optional[int] = None
 
     for issue in open_issues:
         num = issue["number"]
         title = issue.get("title", "")
+        body = issue.get("body", "")
+        author = issue.get("author", {}).get("login", "").strip().lower()
         comments = issue.get("comments", [])
 
         if "[adrastea" in title.lower() or "guidance" in title.lower() or "roadmap" in title.lower():
             existing_guidance_issue = num
 
-        # Check comment history
+        # Anti-spam check: is issue waiting on Luke's reply?
+        waiting, reason = mgr.is_waiting_for_user_response(num, issue_data=issue)
+        if waiting:
+            waiting_on_operator = True
+            continue
+
+        # Case 1: Issue has comments
         if comments:
             last_comm = comments[-1]
-            last_author = last_comm.get("author", {}).get("login", "").lower()
-            last_body = last_comm.get("body", "")
+            last_author = last_comm.get("author", {}).get("login", "").strip().lower()
+            last_body = last_comm.get("body", "").strip()
+
+            if mgr.is_adrastea_content(last_body, last_author):
+                waiting_on_operator = True
+                continue
 
             if last_author == operator.lower():
                 operator_guidance.append({
@@ -282,15 +298,63 @@ def scan_and_converse_in_issues(
                     "directive": last_body,
                     "author": operator,
                 })
-            elif "[adrastea autonomous" in last_body.lower() or "### [adrastea" in last_body.lower():
-                # Adrastea already posted and is waiting for Luke's reply on this issue
-                waiting_on_operator = True
+                # Check if we should post a correspondence reply
+                reply_md = (
+                    f"**Autonomous Guidance Acknowledged for @{operator}**\n\n"
+                    f"- **Target Repository:** `{github_repo}`\n"
+                    f"- **Issue Thread:** #{num} (`{title}`)\n"
+                    f"- **Received Guidance:**\n"
+                    f"  > {last_body}\n\n"
+                    f"- **System Alpha & Beta Execution Plan:**\n"
+                    f"  1. Priority tuned for `{repo_name}` autonomous feature builder.\n"
+                    f"  2. Ingested into long-term system memory.\n"
+                    f"  3. Work will be staged on a dedicated branch and submitted via Pull Request.\n\n"
+                    f"Standing by for further instructions."
+                )
+                post_res = mgr.post_response_to_issue(num, reply_md, force=True)
+                if post_res.get("success"):
+                    actions_taken.append(f"replied_to_guidance_#{num}")
+                    logger.info(f"Replied to operator guidance on {github_repo} #{num}")
+            elif last_author != operator.lower() and not mgr.is_adrastea_content(last_body, last_author):
+                # External contributor commented
+                mgr.post_contributor_pleasantry(num, last_author)
+                actions_taken.append(f"sent_pleasantry_comment_#{num}")
+
+        # Case 2: Issue has NO comments (newly opened issue)
+        else:
+            if author == operator.lower():
+                is_adrastea_issue = mgr.is_adrastea_content(body, author)
+                if not is_adrastea_issue:
+                    operator_guidance.append({
+                        "issue_number": num,
+                        "title": title,
+                        "directive": body or title,
+                        "author": operator,
+                    })
+                    reply_md = (
+                        f"**Autonomous Issue Ingestion & Response for @{operator}**\n\n"
+                        f"- **Target Repository:** `{github_repo}`\n"
+                        f"- **Issue:** #{num} (`{title}`)\n"
+                        f"- **Directive / Topic:**\n"
+                        f"  > {body or title}\n\n"
+                        f"- **System Alpha & Beta Execution Plan:**\n"
+                        f"  - Adopted this issue as an active objective for `{repo_name}`.\n"
+                        f"  - Formulating implementation requirements and diagnostics.\n"
+                        f"  - Updates and proposed PRs will be linked directly to this thread.\n\n"
+                        f"Standing by for your steering."
+                    )
+                    post_res = mgr.post_response_to_issue(num, reply_md, force=True)
+                    if post_res.get("success"):
+                        actions_taken.append(f"replied_to_new_issue_#{num}")
+                        logger.info(f"Replied to new issue #{num} on {github_repo}")
+            elif author and author != operator.lower():
+                # External user opened an issue
+                mgr.post_contributor_pleasantry(num, author)
+                actions_taken.append(f"sent_pleasantry_issue_#{num}")
 
     # Step 3: If no open issues or no guidance thread exists, create an initial guidance inquiry issue
-    action_taken = "observed"
     created_issue_num: Optional[int] = None
-
-    if auto_ask and not existing_guidance_issue and not waiting_on_operator:
+    if auto_ask and not existing_guidance_issue and not waiting_on_operator and not operator_guidance:
         logger.info(f"Opening architectural guidance and roadmap issue on {github_repo}...")
         questions_md = "\n".join(f"{i+1}. {q}" for i, q in enumerate(spec["guidance_questions"]))
         features_md = "\n".join(f"- [ ] **{f}**" for f in spec["proposed_features"])
@@ -335,11 +399,12 @@ def scan_and_converse_in_issues(
                 output_url = create_res.stdout.strip()
                 match = re.search(r"/issues/(\d+)", output_url)
                 created_issue_num = int(match.group(1)) if match else None
-                action_taken = f"created_guidance_issue_#{created_issue_num}"
+                actions_taken.append(f"created_guidance_issue_#{created_issue_num}")
                 logger.info(f"Created guidance issue on {github_repo}: {output_url}")
         except Exception as e:
             logger.error(f"Failed to create guidance issue on {github_repo}: {e}")
 
+    action_summary = ", ".join(actions_taken) if actions_taken else ("waiting_on_operator" if waiting_on_operator else "observed")
     return {
         "success": True,
         "repo": github_repo,
@@ -347,7 +412,8 @@ def scan_and_converse_in_issues(
         "existing_guidance_issue": existing_guidance_issue,
         "waiting_on_operator": waiting_on_operator,
         "operator_guidance": operator_guidance,
-        "action_taken": action_taken,
+        "action_taken": action_summary,
+        "actions_taken": actions_taken,
         "created_issue_number": created_issue_num,
     }
 
@@ -518,6 +584,11 @@ class CompanionFeatureBuilderGoal(BaseGoal):
         focus = self.parameters.get("focus_repo")
         if focus and focus in repos:
             return focus
+        directive_repo = self.parameters.get("directive_repo")
+        if directive_repo:
+            clean_repo = directive_repo.replace("holman57/", "").strip()
+            if clean_repo in repos:
+                return clean_repo
         if not repos:
             return "speech-flow"
         selected = repos[self._current_index % len(repos)]

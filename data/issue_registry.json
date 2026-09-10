@@ -70,6 +70,86 @@
     "9": {
       "wait_count": 0,
       "last_ask_timestamp": 1789005051.0
+    },
+    "holman57/market-research#5": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007731.5942507
+    },
+    "holman57/market-research#4": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/market-research#2": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007733.5750046
+    },
+    "holman57/market-research#1": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007734.4664235
+    },
+    "holman57/speech-flow#10": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007815.6363475
+    },
+    "holman57/distributed-content-management#3": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007737.7958615
+    },
+    "holman57/hardcode#2": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007815.6131315
+    },
+    "holman57/hardcode#6": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007676.2173142
+    },
+    "holman57/hardcode#5": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007677.1741116
+    },
+    "holman57/hardcode#4": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007678.2179494
+    },
+    "holman57/speech-flow#2": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007729.8479846
+    },
+    "holman57/interpretive-interface#2": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007735.930649
+    },
+    "holman57/distributed-content-management#1": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007739.0305798
+    },
+    "8": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1789005792.0
+    },
+    "7": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1788892166.0
+    },
+    "6": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1788891530.0
+    },
+    "5": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1788891580.0
+    },
+    "4": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "3": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1788891740.0
+    },
+    "2": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1788891794.0
     }
   }
 }

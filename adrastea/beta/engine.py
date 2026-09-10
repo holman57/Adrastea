@@ -139,17 +139,21 @@ class BetaEngine:
                         await self.ipc.send(Message(signal=SignalType.SIG_WAKE, sender="Beta"))
 
                     # A. Goal Steering: If directive targets a specific goal, tune it immediately
+                    directive_repo = getattr(directive, "repo", None) or "holman57/Adrastea"
                     if goal_id:
-                        logger.info(f"Targeted directive steering for goal [{goal_id}]...")
+                        logger.info(f"Targeted directive steering for goal [{goal_id}] on {directive_repo}...")
                         tune_payload: Dict[str, Any] = {
                             "goal_id": goal_id,
                             "weight": 2.5,
-                            "parameters": {"latest_user_instruction": str(directive)},
+                            "parameters": {
+                                "latest_user_instruction": str(directive),
+                                "directive_repo": directive_repo,
+                            },
                         }
-                        if goal_id == "ecosystem_repos":
+                        if goal_id in ("ecosystem_repos", "companion_feature_builder"):
                             d_lower = str(directive).lower()
-                            for repo in ["speech-flow", "interpretive-interface", "distributed-content-management"]:
-                                if repo in d_lower or repo.replace("-", " ") in d_lower:
+                            for repo in ["speech-flow", "interpretive-interface", "distributed-content-management", "hardcode", "market-research"]:
+                                if repo in d_lower or repo.replace("-", " ") in d_lower or repo in directive_repo:
                                     tune_payload["parameters"]["focus_repo"] = repo
                         await self.ipc.send(
                             Message(
@@ -173,6 +177,7 @@ class BetaEngine:
                                 "metadata": {
                                     "user_directive": str(directive),
                                     "goal_id": goal_id,
+                                    "repo": directive_repo,
                                     "issue_number": issue_num,
                                 }
                             }
@@ -182,9 +187,10 @@ class BetaEngine:
                     # C. Bidirectional Correspondence: Reply directly back to the GitHub issue
                     if getattr(directive, "source", None) == "github_issue" and issue_num:
                         target_label = f"Goal: {goal_id}" if goal_id else (getattr(directive, "topic", None) or f"Issue #{issue_num}")
+                        repo_display = f"\n- **Repository:** `{directive_repo}`" if directive_repo != "holman57/Adrastea" else ""
                         reply_markdown = (
                             f"**Autonomous Directive Adoption & Response for @{directive.author}**\n\n"
-                            f"- **Target Scope:** `{target_label}`\n"
+                            f"- **Target Scope:** `{target_label}`{repo_display}\n"
                             f"- **Received Directive:**\n"
                             f"  > {directive.text}\n\n"
                             f"- **Action Taken:**\n"
@@ -194,17 +200,22 @@ class BetaEngine:
                             f"- **Current State:** Operational. Standing by for your next steer on this thread (anti-spam wait active)."
                         )
                         try:
-                            resp = self.watcher.correspondence_manager.post_response_to_issue(
+                            mgr = (
+                                self.watcher.get_correspondence_manager(directive_repo)
+                                if hasattr(self.watcher, "get_correspondence_manager")
+                                else self.watcher.correspondence_manager
+                            )
+                            resp = mgr.post_response_to_issue(
                                 issue_number=issue_num,
                                 response_markdown=reply_markdown,
                                 force=False,
                             )
                             if resp.get("suppressed"):
-                                logger.info(f"Duplicate reply suppressed for Issue #{issue_num}: {resp.get('details')}")
+                                logger.info(f"Duplicate reply suppressed for Issue #{issue_num} on {directive_repo}: {resp.get('details')}")
                             else:
-                                logger.info(f"Dispatched correspondence reply to Issue #{issue_num}: {resp.get('details')}")
+                                logger.info(f"Dispatched correspondence reply to Issue #{issue_num} on {directive_repo}: {resp.get('details')}")
                         except Exception as e:
-                            logger.error(f"Failed to post correspondence reply to Issue #{issue_num}: {e}")
+                            logger.error(f"Failed to post correspondence reply to Issue #{issue_num} on {directive_repo}: {e}")
 
                     # D. Ingest into Knowledge Graph Memory
                     try:
@@ -212,7 +223,7 @@ class BetaEngine:
                         mm = MemoryManager()
                         mm.record_user_directive(
                             directive_text=str(directive),
-                            source=f"github_issue_#{issue_num}" if issue_num else getattr(directive, "source", "DIRECTIVES.txt"),
+                            source=f"{directive_repo}#issue_{issue_num}" if issue_num else getattr(directive, "source", "DIRECTIVES.txt"),
                             target_goal=goal_id,
                             issue_number=issue_num,
                         )
