@@ -10,6 +10,8 @@ from adrastea.alpha.solved_problems import (
     post_progress_and_pause,
     loop_target_repositories_step,
     run_tests,
+    merge_open_pull_requests,
+    provide_autonomous_guidance,
 )
 from adrastea.knowledge.prompt_compiler import CognitivePromptCompiler
 from adrastea.beta.mcp_client import MCPClient
@@ -100,6 +102,42 @@ class TestSolvedProblemsAndPromptCompiler(unittest.TestCase):
         self.assertTrue(res["paused"])
         self.assertEqual(res["issue_number"], 2)
 
+    @patch("subprocess.run")
+    def test_merge_open_pull_requests_mocked(self, mock_subproc):
+        # Mock gh pr list returning one open PR
+        mock_list = MagicMock()
+        mock_list.returncode = 0
+        mock_list.stdout = json.dumps([
+            {"number": 15, "title": "feat: test pr", "headRefName": "feat/test", "baseRefName": "main", "url": "https://github.com/holman57/speech-flow/pull/15"}
+        ])
+
+        mock_merge = MagicMock()
+        mock_merge.returncode = 0
+        mock_merge.stdout = ""
+
+        # Alternating mock responses for gh pr list, git checkout, gh pr merge, etc.
+        mock_subproc.side_effect = [mock_list, mock_merge, MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=0), MagicMock(returncode=0)]
+
+        with patch("adrastea.alpha.solved_problems.run_tests", return_value={"success": True, "exit_code": 0}):
+            res = merge_open_pull_requests("speech-flow")
+            self.assertTrue(res["success"])
+            self.assertEqual(res["merged_count"], 1)
+
+    @patch("subprocess.run")
+    @patch("adrastea.beta.llm_consultant.LLMConsultant.consult")
+    def test_provide_autonomous_guidance_mocked(self, mock_consult, mock_subproc):
+        mock_consult.return_value = "1. Adopt state machine. 2. Implement RMS filter. 3. Add tests."
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="Comment posted successfully")
+
+        res = provide_autonomous_guidance(
+            repo_name="speech-flow",
+            issue_number=2,
+            issue_data={"title": "VAD feature", "body": "Need VAD"},
+        )
+        self.assertTrue(res["success"])
+        self.assertIn("Adopt state machine", res["guidance"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

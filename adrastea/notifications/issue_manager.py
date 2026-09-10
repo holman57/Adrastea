@@ -14,8 +14,12 @@ logger = logging.getLogger("Adrastea.Notifications.IssueManager")
 AUTHORIZED_OPERATOR = "holman57"
 
 # Escalating wait backoff constants for issues awaiting operator response
-WAIT_BASE_DAYS = getattr(config, "issue_wait_base_days", 2.0)
-WAIT_MAX_DAYS = getattr(config, "issue_wait_max_days", 30.0)
+# Default: 10 minutes (600s) baseline for high-autonomy self-guidance
+WAIT_BASE_SECONDS = getattr(config, "issue_wait_base_seconds", 600.0)
+WAIT_MAX_SECONDS = getattr(config, "issue_wait_max_seconds", 7200.0)
+WAIT_BASE_DAYS = getattr(config, "issue_wait_base_days", WAIT_BASE_SECONDS / 86400.0)
+WAIT_MAX_DAYS = getattr(config, "issue_wait_max_days", WAIT_MAX_SECONDS / 86400.0)
+
 
 # Autonomous Adrastea markers across issues and comments
 ADRASTEA_AUTONOMOUS_MARKERS = [
@@ -619,12 +623,14 @@ class IssueCorrespondenceManager:
         return str(issue_number)
 
     def get_issue_wait_duration(self, issue_number: int) -> float:
-        """Returns required wait duration in seconds for an issue based on how many times Adrastea has asked."""
+        """Returns required wait duration in seconds for an issue based on how many times Adrastea has asked.
+        Baseline is 600s (10 minutes) before Adrastea adopts autonomous guidance.
+        """
         key = self._wait_key(issue_number)
         state = self.wait_states.get(key) or self.wait_states.get(str(issue_number), {})
         wait_count = state.get("wait_count", 0)
-        days = min(WAIT_MAX_DAYS, WAIT_BASE_DAYS * (2 ** wait_count))
-        return days * 86400.0
+        seconds = min(WAIT_MAX_SECONDS, WAIT_BASE_SECONDS * (2 ** wait_count))
+        return float(seconds)
 
     def get_wait_count(self, issue_number: int) -> int:
         """Get the current follow-up count for an issue."""
@@ -683,16 +689,16 @@ class IssueCorrespondenceManager:
 
         required_wait = self.get_issue_wait_duration(issue_number)
         elapsed = time.time() - last_ask_ts
-        wait_days = round(required_wait / 86400.0, 1)
-        elapsed_days = round(elapsed / 86400.0, 1)
+        wait_mins = round(required_wait / 60.0, 1)
+        elapsed_mins = round(elapsed / 60.0, 1)
 
         if elapsed < required_wait:
             return True, (
                 f"Issue #{issue_number} is already waiting on a response from @{AUTHORIZED_OPERATOR} "
-                f"({elapsed_days}d / {wait_days}d wait; escalating backoff active)."
+                f"({elapsed_mins}m / {wait_mins}m wait window active)."
             )
 
-        return False, f"Escalating wait period expired ({elapsed_days}d >= {wait_days}d); safe to send status follow-up."
+        return False, f"Operator wait period expired ({elapsed_mins}m >= {wait_mins}m); safe to adopt autonomous guidance or send follow-up."
 
     def post_contributor_pleasantry(self, issue_number: int, contributor_login: str) -> Dict[str, Any]:
         """Posts a friendly pleasantry acknowledging external community members without taking system actions."""

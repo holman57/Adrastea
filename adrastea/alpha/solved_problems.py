@@ -500,6 +500,196 @@ def loop_target_repositories_step(
     }
 
 
+def merge_open_pull_requests(
+    repo_name: str,
+    workspace_dir: Optional[Path] = None,
+    merge_method: str = "merge",
+    auto_delete_branch: bool = True,
+) -> Dict[str, Any]:
+    """Solved Problem 9: Autonomously verify and merge open pull requests on target repositories
+    into their base branch (main / master) as requested by Luke.
+    """
+    clean_repo = repo_name.split("/")[-1] if "/" in repo_name else repo_name
+    github_repo = f"holman57/{clean_repo}"
+    repo_dir = get_repo_path(clean_repo, workspace_dir)
+    base_branch = "master" if clean_repo == "interpretive-interface" else "main"
+
+    try:
+        # 1. Fetch open PRs for this repository
+        res = subprocess.run(
+            ["gh", "pr", "list", "--repo", github_repo, "--state", "open", "--json", "number,title,headRefName,baseRefName,url"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+        )
+        if res.returncode != 0 or not res.stdout.strip():
+            return {"success": True, "repo": repo_name, "merged_count": 0, "merged_prs": [], "message": "No open PRs found or query failed."}
+
+        prs = json.loads(res.stdout)
+        if not prs:
+            return {"success": True, "repo": repo_name, "merged_count": 0, "merged_prs": [], "message": "No open PRs found."}
+
+        merged = []
+        for pr in prs:
+            pr_num = pr["number"]
+            pr_title = pr["title"]
+            head_branch = pr.get("headRefName")
+
+            # 2. Verify tests locally if workspace repo exists
+            if repo_dir.is_dir():
+                test_res = run_tests(repo_name, workspace_dir=workspace_dir)
+                if not test_res.get("success", False) and test_res.get("exit_code") != -1:
+                    logger.warning(f"Tests failed for {repo_name} prior to merging PR #{pr_num}: {test_res.get('error')}")
+                    continue
+
+            # 3. Merge PR via gh CLI
+            merge_cmd = ["gh", "pr", "merge", str(pr_num), "--repo", github_repo, f"--{merge_method}"]
+            if auto_delete_branch:
+                merge_cmd.append("--delete-branch")
+
+            merge_res = subprocess.run(
+                merge_cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+
+            if merge_res.returncode == 0:
+                logger.info(f"Successfully merged PR #{pr_num} ({pr_title}) on {github_repo}")
+                merged.append({"number": pr_num, "title": pr_title, "url": pr.get("url")})
+
+                # 4. Pull base branch in local checkout
+                if repo_dir.is_dir():
+                    try:
+                        subprocess.run(["git", "checkout", base_branch], cwd=str(repo_dir), capture_output=True, text=True, timeout=10)
+                        subprocess.run(["git", "pull", "origin", base_branch], cwd=str(repo_dir), capture_output=True, text=True, timeout=15)
+                        if head_branch and auto_delete_branch:
+                            subprocess.run(["git", "branch", "-d", head_branch], cwd=str(repo_dir), capture_output=True, text=True, timeout=10)
+                        subprocess.run(["git", "remote", "prune", "origin"], cwd=str(repo_dir), capture_output=True, text=True, timeout=10)
+                    except Exception as e:
+                        logger.warning(f"Error updating local git state for {repo_name}: {e}")
+            else:
+                logger.warning(f"Failed to merge PR #{pr_num} on {github_repo}: {merge_res.stderr.strip()}")
+
+        return {
+            "success": True,
+            "repo": repo_name,
+            "merged_count": len(merged),
+            "merged_prs": merged,
+        }
+    except Exception as e:
+        logger.error(f"Error in merge_open_pull_requests for {repo_name}: {e}")
+        return {"success": False, "repo": repo_name, "error": str(e)}
+
+
+def provide_autonomous_guidance(
+    repo_name: str,
+    issue_number: int,
+    issue_data: Optional[Dict[str, Any]] = None,
+    workspace_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Solved Problem 10: Formulate authoritative technical decisions and implementation direction
+    via Gemini (with local LLM fallback) when Luke has not responded within the 10-minute window,
+    or when autonomous self-direction is required.
+    """
+    from ..beta.llm_consultant import LLMConsultant
+
+    clean_repo = repo_name.split("/")[-1] if "/" in repo_name else repo_name
+    github_repo = f"holman57/{clean_repo}"
+    mgr = IssueCorrespondenceManager(repo=github_repo)
+    env = inspect_repository(clean_repo, workspace_dir)
+
+    title = ""
+    body = ""
+    if issue_data:
+        title = issue_data.get("title", "")
+        body = issue_data.get("body", "")
+    else:
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "view", str(issue_number), "--repo", github_repo, "--json", "title,body"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                title = data.get("title", "")
+                body = data.get("body", "")
+        except Exception as e:
+            logger.warning(f"Failed to fetch issue details for #{issue_number}: {e}")
+
+    prompt = (
+        f"You are the cognitive reasoning strategist (Beta) for Adrastea, paired with autonomous deterministic core (Alpha).\n"
+        f"Operator Luke Holman (@holman57) has granted high autonomy: 'provide your own guidance if I haven't responded within 10 minutes, "
+        f"or if you don't need guidance and want to keep iterating over target repo instructions and issues. Work in a loop autonomously.'\n\n"
+        f"Repository: {repo_name}\n"
+        f"Tech Stack: {env.get('test_runner', 'standard')}\n"
+        f"Issue #{issue_number}: {title}\n"
+        f"Issue Description:\n{body[:2000]}\n\n"
+        f"Provide a clear, decisive architectural decision and concrete 3-step implementation roadmap for Adrastea to execute immediately. "
+        f"Keep the response professional, concise, and actionable."
+    )
+
+    consultant = LLMConsultant()
+    guidance = consultant.consult(
+        prompt=prompt,
+        system_prompt="You are Adrastea's cognitive strategy engine. Produce concrete, production-grade technical decisions.",
+        preferred_provider="gemini",
+    )
+
+    guidance_comment = (
+        f"### [Adrastea Autonomous Guidance Adopted via Gemini]\n\n"
+        f"In accordance with @holman57's high-autonomy directive, Adrastea has consulted **Gemini** to formulate authoritative strategic guidance and unblock autonomous execution on this thread:\n\n"
+        f"{guidance}\n\n"
+        f"---\n"
+        f"**Execution Status:** Autonomous implementation is active. Adrastea will develop and test changes in this cycle."
+    )
+
+    post_res = mgr.post_response_to_issue(issue_number, guidance_comment, force=True)
+    mgr.reset_issue_wait(issue_number)
+
+    return {
+        "success": post_res.get("success", False),
+        "repo": repo_name,
+        "issue_number": issue_number,
+        "guidance": guidance,
+    }
+
+
+def auto_steer_target_repository(
+    repo_name: str,
+    workspace_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Scans open issues on target repository. If an issue is waiting and 10 minutes have elapsed,
+    or if an issue has no open questions, automatically provides autonomous guidance and unlocks it.
+    """
+    github_repo = f"holman57/{repo_name}" if "/" not in repo_name else repo_name
+    mgr = IssueCorrespondenceManager(repo=github_repo)
+    issues_res = fetch_repo_issues(repo_name, workspace_dir)
+
+    steered = []
+    for issue in issues_res.get("all_open_issues", []):
+        num = issue["number"]
+        waiting, reason = mgr.is_waiting_for_user_response(num, issue_data=issue)
+        if not waiting and "expired" in reason.lower():
+            res = provide_autonomous_guidance(repo_name, num, issue_data=issue, workspace_dir=workspace_dir)
+            if res.get("success"):
+                steered.append(num)
+
+    return {
+        "repo": repo_name,
+        "steered_issues": steered,
+        "count": len(steered),
+    }
+
+
 def cli_main():
     import sys
     action = sys.argv[1] if len(sys.argv) > 1 else "loop"
@@ -512,6 +702,12 @@ def cli_main():
     elif action == "test" and repo:
         res = run_tests(repo)
         print(f"REPO_TEST: Repo={repo} | Success={res.get('success')} | Duration={res.get('duration')}s | ExitCode={res.get('exit_code')}")
+    elif action == "merge" and repo:
+        res = merge_open_pull_requests(repo)
+        print(f"REPO_MERGE: Repo={repo} | Success={res.get('success')} | MergedCount={res.get('merged_count', 0)}")
+    elif action == "auto-steer" and repo:
+        res = auto_steer_target_repository(repo)
+        print(f"REPO_STEER: Repo={repo} | SteeredCount={res.get('count', 0)}")
     elif action == "loop":
         res = loop_target_repositories_step()
         print(f"TARGET_REPOS_LOOP: Total={res.get('total_repos')} | ActionableQueue={res.get('actionable_queue_length')}")
@@ -521,4 +717,5 @@ def cli_main():
 
 if __name__ == "__main__":
     cli_main()
+
 

@@ -60,10 +60,13 @@ class Config:
     beta_idle_cycle_seconds: float = float(os.getenv("BETA_IDLE_CYCLE_SECONDS", "30.0"))
     beta_enable_mcp: bool = os.getenv("BETA_ENABLE_MCP", "true").lower() == "true"
 
-    # Issue Loop & Cadence Settings
+    # Issue Loop & Cadence Settings (High-Autonomy: 10-minute self-guidance window)
     issue_loop_interval_seconds: float = float(os.getenv("ADRASTEA_ISSUE_LOOP_SECONDS", "900.0"))
-    issue_wait_base_days: float = float(os.getenv("ADRASTEA_WAIT_BASE_DAYS", "2.0"))
-    issue_wait_max_days: float = float(os.getenv("ADRASTEA_WAIT_MAX_DAYS", "30.0"))
+    issue_wait_base_seconds: float = float(os.getenv("ADRASTEA_WAIT_BASE_SECONDS", "600.0"))  # 10 minutes
+    issue_wait_max_seconds: float = float(os.getenv("ADRASTEA_WAIT_MAX_SECONDS", "7200.0"))  # 2 hours max
+    auto_guidance_timeout_seconds: float = float(os.getenv("ADRASTEA_AUTO_GUIDANCE_TIMEOUT", "600.0"))  # 10 minutes
+    issue_wait_base_days: float = float(os.getenv("ADRASTEA_WAIT_BASE_DAYS", str(600.0 / 86400.0)))
+    issue_wait_max_days: float = float(os.getenv("ADRASTEA_WAIT_MAX_DAYS", str(7200.0 / 86400.0)))
 
     # Local LLM (Ollama)
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")

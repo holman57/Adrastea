@@ -249,24 +249,25 @@ class TestIssueManagerAndSecurity(unittest.TestCase):
             self.assertIsNone(directive)
 
     def test_escalating_backoff_for_waiting_issues(self):
-        # Initial wait duration is 2 days (172,800 seconds)
+        from adrastea.notifications.issue_manager import WAIT_BASE_SECONDS
+        # Initial wait duration is baseline (600 seconds)
         duration_0 = self.topic_mgr.get_issue_wait_duration(5)
-        self.assertEqual(duration_0, 2.0 * 86400.0)
+        self.assertEqual(duration_0, WAIT_BASE_SECONDS)
 
-        # After Adrastea asks once, wait escalates to 4 days (345,600 seconds)
+        # After Adrastea asks once, wait escalates by 2x
         self.topic_mgr.record_adrastea_inquiry(5)
         duration_1 = self.topic_mgr.get_issue_wait_duration(5)
-        self.assertEqual(duration_1, 4.0 * 86400.0)
+        self.assertEqual(duration_1, WAIT_BASE_SECONDS * 2)
 
-        # After Adrastea asks twice, wait escalates to 8 days (691,200 seconds)
+        # After Adrastea asks twice, wait escalates by 4x
         self.topic_mgr.record_adrastea_inquiry(5)
         duration_2 = self.topic_mgr.get_issue_wait_duration(5)
-        self.assertEqual(duration_2, 8.0 * 86400.0)
+        self.assertEqual(duration_2, WAIT_BASE_SECONDS * 4)
 
-        # When operator replies, wait state resets back to count 0 (2 days)
+        # When operator replies, wait state resets back to count 0
         self.topic_mgr.reset_issue_wait(5)
         duration_reset = self.topic_mgr.get_issue_wait_duration(5)
-        self.assertEqual(duration_reset, 2.0 * 86400.0)
+        self.assertEqual(duration_reset, WAIT_BASE_SECONDS)
         self.assertEqual(self.topic_mgr.get_wait_count(5), 0)
 
     @patch("subprocess.run")

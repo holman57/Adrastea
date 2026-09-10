@@ -104,5 +104,41 @@ class RepoFeatureExecutorGoal(BaseGoal):
             )
         )
 
+        # Task 3: Autonomous Pull Request Verification & Merge
+        cmd_merge = (
+            f'"{sys.executable}" -m adrastea.alpha.solved_problems merge {target_repo}'
+        )
+        tasks.append(
+            ScheduledTask(
+                task_id=f"repo_exec_merge_{clean_repo_id}_{int(now)}",
+                command=cmd_merge,
+                priority=base_priority + 4,
+                interval_seconds=None,
+                metadata={
+                    "goal_id": self.goal_id,
+                    "repo": target_repo,
+                    "intent": "Target Repository Autonomous PR Merge",
+                },
+            )
+        )
+
+        # Task 4: Autonomous Guidance & Issue Self-Direction (10-Minute Timeout)
+        cmd_steer = (
+            f'"{sys.executable}" -m adrastea.alpha.solved_problems auto-steer {target_repo}'
+        )
+        tasks.append(
+            ScheduledTask(
+                task_id=f"repo_exec_steer_{clean_repo_id}_{int(now)}",
+                command=cmd_steer,
+                priority=base_priority + 1,
+                interval_seconds=None,
+                metadata={
+                    "goal_id": self.goal_id,
+                    "repo": target_repo,
+                    "intent": "Target Repository Autonomous Issue Steering & Gemini Guidance",
+                },
+            )
+        )
+
         self.mark_executed()
         return tasks

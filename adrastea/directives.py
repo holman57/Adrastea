@@ -369,21 +369,22 @@ class DirectiveWatcher:
                         self._save_seen_comments()
                         continue
 
-                    # 4. Check if escalating wait period expired ("unless it has been days")
-                    if "safe to send status follow-up" in reason.lower() or "expired" in reason.lower():
-                        wait_count = (
-                            mgr.get_wait_count(issue_num)
-                            if hasattr(mgr, "get_wait_count")
-                            else 0
-                        )
-                        follow_up = (
-                            f"### [Adrastea Autonomous Status & Inquiries]\n\n"
-                            f"Periodic follow-up on this thread for @{AUTHORIZED_DIRECTIVE_AUTHOR}: "
-                            f"Adrastea is standing by for any steering, priorities, or feedback on this topic.\n\n"
-                            f"- **Follow-up Index:** #{wait_count + 1}\n"
-                            f"- **Escalating Backoff:** Next wait window will escalate automatically to avoid thread clutter."
-                        )
-                        mgr.post_response_to_issue(issue_num, follow_up, force=True)
+                    # 4. Check if wait window expired (10-minute timeout for autonomous self-guidance)
+                    if "safe to adopt autonomous guidance" in reason.lower() or "expired" in reason.lower() or "safe to send status follow-up" in reason.lower():
+                        logger.info(f"Operator wait window expired for issue #{issue_num} on {repo}. Adopting autonomous Gemini guidance.")
+                        from .alpha.solved_problems import provide_autonomous_guidance
+                        guide_res = provide_autonomous_guidance(repo, issue_num, issue_data=issue_data)
+                        if guide_res.get("success"):
+                            d = Directive(
+                                text=f"Autonomously execute plan on {repo} #{issue_num}: {guide_res.get('guidance', '')[:200]}",
+                                author=AUTHORIZED_DIRECTIVE_AUTHOR,
+                                source="autonomous_gemini_guidance",
+                                repo=repo,
+                                issue_number=issue_num,
+                                goal_id=goal_id,
+                                topic=topic,
+                            )
+                            self._pending_directives.append(d)
                         continue
 
                     if not comments:
