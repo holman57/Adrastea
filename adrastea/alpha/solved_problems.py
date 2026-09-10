@@ -498,3 +498,27 @@ def loop_target_repositories_step(
         "actionable_queue": actionable_queue,
         "snapshots": repo_snapshots,
     }
+
+
+def cli_main():
+    import sys
+    action = sys.argv[1] if len(sys.argv) > 1 else "loop"
+    repo = sys.argv[2] if len(sys.argv) > 2 else None
+
+    if action == "inspect" and repo:
+        env = inspect_repository(repo)
+        issues = fetch_repo_issues(repo)
+        print(f"REPO_LOOP: Repo={repo} | Actionable={issues.get('actionable_count')} | Waiting={issues.get('waiting_count')} | Tests={env.get('test_runner')}")
+    elif action == "test" and repo:
+        res = run_tests(repo)
+        print(f"REPO_TEST: Repo={repo} | Success={res.get('success')} | Duration={res.get('duration')}s | ExitCode={res.get('exit_code')}")
+    elif action == "loop":
+        res = loop_target_repositories_step()
+        print(f"TARGET_REPOS_LOOP: Total={res.get('total_repos')} | ActionableQueue={res.get('actionable_queue_length')}")
+    else:
+        print(f"Unknown action or missing repo: action={action}, repo={repo}")
+
+
+if __name__ == "__main__":
+    cli_main()
+

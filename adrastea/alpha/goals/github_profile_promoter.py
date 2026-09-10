@@ -601,11 +601,7 @@ class GitHubProfilePromoterGoal(BaseGoal):
 
         # Task 1: Audit Profile & Star Metrics
         cmd_audit = (
-            f'"{sys.executable}" -c '
-            f'"from adrastea.alpha.goals.github_profile_promoter import audit_github_profile_and_repos; '
-            f'data = audit_github_profile_and_repos(\'{TARGET_USER}\'); '
-            f'print(f\'GROWTH_AUDIT: User={TARGET_USER} | Followers={{data[\"profile\"].get(\"followers\")}} | '
-            f'Stars={{data.get(\"total_stars\")}} | Repos={{len(data.get(\"repos\", []))}}\')"'
+            f'"{sys.executable}" -m adrastea.alpha.goals.github_profile_promoter --user {TARGET_USER} --audit'
         )
         tasks.append(
             ScheduledTask(
@@ -624,11 +620,7 @@ class GitHubProfilePromoterGoal(BaseGoal):
         # Task 2: Post tailored growth strategy to target repo issues
         if self.parameters.get("auto_post_issues", True):
             cmd_post = (
-                f'"{sys.executable}" -c '
-                f'"from adrastea.alpha.goals.github_profile_promoter import post_or_update_growth_issue; '
-                f'res = post_or_update_growth_issue(\'{target_repo}\', \'{TARGET_USER}\'); '
-                f'print(f\'GROWTH_ISSUE: Repo={target_repo} | Action={{res.get(\"action\")}} | '
-                f'Issue={{res.get(\"issue_number\")}} | URL={{res.get(\"issue_url\")}}\')"'
+                f'"{sys.executable}" -m adrastea.alpha.goals.github_profile_promoter --repo {target_repo} --user {TARGET_USER} --post'
             )
             tasks.append(
                 ScheduledTask(

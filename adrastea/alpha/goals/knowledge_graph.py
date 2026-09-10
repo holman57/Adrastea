@@ -38,12 +38,7 @@ class KnowledgeGraphMemoryGoal(BaseGoal):
 
         # Task 1: Autonomous Memory Consolidation & Pruning Task
         cmd_consolidate = (
-            f'"{sys.executable}" -c '
-            f'"from adrastea.knowledge.memory_manager import MemoryManager; '
-            f'mm = MemoryManager(); '
-            f'res = mm.consolidate_memories(decay_rate={decay_rate}); '
-            f'stats = mm.get_summary(); '
-            f'print(f\'MEMORY_CONSOLIDATION: Promoted={{res.get(\"promoted_to_medium\")}} | PrunedShort={{res.get(\"pruned_short_term\")}} | TotalNodes={{stats.get(\"total_nodes\")}} | Backend={{stats.get(\"backend\")}}\')"'
+            f'"{sys.executable}" -m adrastea.knowledge.memory_manager consolidate {decay_rate}'
         )
         tasks.append(
             ScheduledTask(
@@ -57,12 +52,7 @@ class KnowledgeGraphMemoryGoal(BaseGoal):
 
         # Task 2: Graph Database Health & Neo4j Verification Task
         cmd_health = (
-            f'"{sys.executable}" -c '
-            f'"from adrastea.knowledge.memory_manager import MemoryManager; '
-            f'mm = MemoryManager(); '
-            f'stats = mm.get_summary(); '
-            f'tiers = stats.get(\'tiers\', {{}}); '
-            f'print(f\'KNOWLEDGE_GRAPH_STATUS: TotalNodes={{stats.get(\"total_nodes\")}} | Rels={{stats.get(\"total_relationships\")}} | Tiers={{tiers}}\')"'
+            f'"{sys.executable}" -m adrastea.knowledge.memory_manager health'
         )
         tasks.append(
             ScheduledTask(

@@ -68,26 +68,38 @@ class RepoFeatureExecutorGoal(BaseGoal):
         target_repo = self._select_repo()
         clean_repo_id = target_repo.replace("-", "_")
 
-        # Command: Execute target repository inspection and actionable issue gathering
-        cmd_loop = (
-            f'"{sys.executable}" -c '
-            f'"from adrastea.alpha.solved_problems import inspect_repository, fetch_repo_issues; '
-            f'env = inspect_repository(\'{target_repo}\'); '
-            f'issues = fetch_repo_issues(\'{target_repo}\'); '
-            f'print(f\'REPO_LOOP: Repo={target_repo} | Actionable={{issues.get(\"actionable_count\")}} | '
-            f'Waiting={{issues.get(\"waiting_count\")}} | Tests={{env.get(\"test_runner\")}}\')"'
+        # Task 1: Repository inspection & issue actionable queue gathering
+        cmd_inspect = (
+            f'"{sys.executable}" -m adrastea.alpha.solved_problems inspect {target_repo}'
         )
-
         tasks.append(
             ScheduledTask(
-                task_id=f"repo_exec_{clean_repo_id}_{int(now)}",
-                command=cmd_loop,
+                task_id=f"repo_exec_inspect_{clean_repo_id}_{int(now)}",
+                command=cmd_inspect,
                 priority=base_priority,
                 interval_seconds=None,
                 metadata={
                     "goal_id": self.goal_id,
                     "repo": target_repo,
-                    "intent": "Target Repository Solved Problems Loop",
+                    "intent": "Target Repository Solved Problems Inspection",
+                },
+            )
+        )
+
+        # Task 2: Automated test execution & verification for target repository
+        cmd_test = (
+            f'"{sys.executable}" -m adrastea.alpha.solved_problems test {target_repo}'
+        )
+        tasks.append(
+            ScheduledTask(
+                task_id=f"repo_exec_test_{clean_repo_id}_{int(now)}",
+                command=cmd_test,
+                priority=base_priority + 2,
+                interval_seconds=None,
+                metadata={
+                    "goal_id": self.goal_id,
+                    "repo": target_repo,
+                    "intent": "Target Repository Autonomous Test Verification",
                 },
             )
         )

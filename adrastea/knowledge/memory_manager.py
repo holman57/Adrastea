@@ -309,3 +309,21 @@ class MemoryManager:
     def get_summary(self) -> Dict[str, Any]:
         """Return high-level telemetry and node distribution of the knowledge graph."""
         return self.store.get_graph_stats()
+
+
+def main():
+    import sys
+    mm = MemoryManager()
+    if len(sys.argv) > 1 and sys.argv[1] == "consolidate":
+        decay = float(sys.argv[2]) if len(sys.argv) > 2 else 0.85
+        res = mm.consolidate_memories(decay_rate=decay)
+        stats = mm.get_summary()
+        print(f"MEMORY_CONSOLIDATION: Promoted={res.get('promoted_to_medium')} | PrunedShort={res.get('pruned_short_term')} | TotalNodes={stats.get('total_nodes')} | Backend={stats.get('backend')}")
+    else:
+        stats = mm.get_summary()
+        print(f"KNOWLEDGE_GRAPH_STATUS: TotalNodes={stats.get('total_nodes')} | Rels={stats.get('total_relationships')} | Tiers={stats.get('tiers')}")
+
+
+if __name__ == "__main__":
+    main()
+

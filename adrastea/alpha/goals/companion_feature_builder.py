@@ -605,11 +605,7 @@ class CompanionFeatureBuilderGoal(BaseGoal):
 
         # Task 1: Repository Architecture Analysis & Diagnostics
         cmd_analyze = (
-            f'"{sys.executable}" -c '
-            f'"from adrastea.alpha.goals.companion_feature_builder import analyze_companion_repo; '
-            f'res = analyze_companion_repo(\'{target_repo}\'); '
-            f'print(f\'COMPANION_ANALYSIS: Repo={target_repo} | Branch={{res.get(\"branch\")}} | '
-            f'Clean={{res.get(\"is_clean\")}} | HasTests={{res.get(\"has_tests\")}} | HasReadme={{res.get(\"has_readme\")}}\')"'
+            f'"{sys.executable}" -m adrastea.alpha.goals.companion_feature_builder --repo {target_repo} --analyze'
         )
         tasks.append(
             ScheduledTask(
@@ -628,11 +624,7 @@ class CompanionFeatureBuilderGoal(BaseGoal):
         # Task 2: Repository Issue Conversation & Guidance Scan
         if self.parameters.get("interactive_issues_enabled", True):
             cmd_issues = (
-                f'"{sys.executable}" -c '
-                f'"from adrastea.alpha.goals.companion_feature_builder import scan_and_converse_in_issues; '
-                f'res = scan_and_converse_in_issues(\'{target_repo}\'); '
-                f'print(f\'COMPANION_ISSUES: Repo={target_repo} | Action={{res.get(\"action_taken\")}} | '
-                f'Waiting={{res.get(\"waiting_on_operator\")}} | Directives={{len(res.get(\"operator_guidance\", []))}}\')"'
+                f'"{sys.executable}" -m adrastea.alpha.goals.companion_feature_builder --repo {target_repo} --scan-issues'
             )
             tasks.append(
                 ScheduledTask(

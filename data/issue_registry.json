@@ -72,12 +72,12 @@
       "last_ask_timestamp": 1789005051.0
     },
     "holman57/market-research#5": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007731.5942507
+      "wait_count": 3,
+      "last_ask_timestamp": 1789010810.998666
     },
     "holman57/market-research#4": {
       "wait_count": 1,
-      "last_ask_timestamp": 1789007732.5614011
+      "last_ask_timestamp": 1789010174.7323022
     },
     "holman57/market-research#2": {
       "wait_count": 1,
@@ -89,15 +89,15 @@
     },
     "holman57/speech-flow#10": {
       "wait_count": 1,
-      "last_ask_timestamp": 1789009989.4685922
+      "last_ask_timestamp": 1789011194.7807415
     },
     "holman57/distributed-content-management#3": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007737.7958615
+      "wait_count": 3,
+      "last_ask_timestamp": 1789010872.760592
     },
     "holman57/hardcode#2": {
-      "wait_count": 5,
-      "last_ask_timestamp": 1789010037.4032438
+      "wait_count": 3,
+      "last_ask_timestamp": 1789011239.5477345
     },
     "holman57/hardcode#6": {
       "wait_count": 1,
@@ -112,20 +112,20 @@
       "last_ask_timestamp": 1789009886.4073362
     },
     "holman57/speech-flow#2": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007729.8479846
+      "wait_count": 3,
+      "last_ask_timestamp": 1789010767.902084
     },
     "holman57/interpretive-interface#2": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007735.930649
+      "wait_count": 3,
+      "last_ask_timestamp": 1789010909.6199303
     },
     "holman57/distributed-content-management#1": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007739.0305798
+      "wait_count": 3,
+      "last_ask_timestamp": 1789010871.5972402
     },
     "1": {
-      "wait_count": 0,
-      "last_ask_timestamp": 1788808739.0
+      "wait_count": 1,
+      "last_ask_timestamp": 1789010126.1684294
     },
     "8": {
       "wait_count": 0,
@@ -145,7 +145,7 @@
     },
     "4": {
       "wait_count": 0,
-      "last_ask_timestamp": 1788891687.0
+      "last_ask_timestamp": 0.0
     },
     "3": {
       "wait_count": 0,
