@@ -233,6 +233,80 @@ Routinely analyzes, builds out, and upgrades companion repositories in `C:\\User
 Reply directly to this issue or mention any of the five repositories to steer focus, provide architectural direction, or approve proposed feature branches.
 """
     },
+    "repo_feature_executor": {
+        "title": "[Goal] Target Repository Feature Execution & Solved Problems Loop",
+        "labels": ["goal", "autonomous", "solved-problems", "target-repos", "code-execution"],
+        "summary": "Alpha loops through target repos, reads repo configs and issue directives, offloads procedural tasks as Solved Problems, and invokes Beta to execute features.",
+        "body": """### [Goal] Target Repository Feature Execution & Solved Problems Loop
+
+**Autonomous System Objective:**
+Runs an active developmental loop executing concrete code features and issue requests across target repositories:
+1. `hardcode` (flashcard syntax memorization system & learning app)
+2. `speech-flow` (audio visualizer & real-time speech bridge)
+3. `market-research` (web crawler & topic scoring engine)
+4. `interpretive-interface` (Android 15 voice-first communicative interface)
+5. `distributed-content-management` (multi-niche automated content & monetization)
+
+---
+
+### Procedural Tasks Offloaded to Alpha ("Solved Problems")
+To prevent redundant cognitive overhead, System Beta offloads procedural tasks onto Alpha:
+- **Repository Environment Inspection:** Reads `.adrastea.json`, dependencies, and git state.
+- **Code Patch Application:** Deterministically writes and validates files (`apply_code_patch`).
+- **Test Validation:** Runs test suites (`python unittest`, `flutter test`, `pytest`, Gradle).
+- **Git Operations:** Automated feature branching, staging, committing, and opening Pull Requests assigned to `@holman57`.
+- **Issue Progress Updates & Guidance Pausing:** Updates GitHub issue comments with progress summaries, PR links, and activates anti-spam backoff to pause for Luke's steering.
+
+---
+
+### Cognitive Reasoning & Knowledge Base Reference in Beta
+- **Multi-Tier Memory Prompt Compilation:** Beta queries the knowledge graph (Short-, Medium-, and Long-Term Memory) to compile optimized prompts.
+- **Model Context Protocol (MCP) & Local LLM:** Beta runs local LLM prompts via MCP (`run_local_llm`) and consults Google Gemini for frontier reasoning.
+- **Operator Authority:** Directives from Luke Holman (@holman57) are prioritized and adopted.
+
+---
+
+### How to Steer This Goal
+Comment on any issue in the target repositories or reply to this thread to steer feature priorities or provide architectural guidance.
+"""
+    },
+}
+
+# Standard Prompt Definitions compiled across multi-tiered memory
+PROMPT_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    "feature_synthesis": {
+        "name": "Cognitive Feature Synthesis & Solved Problem Planning",
+        "description": "Formulates concrete code modifications and test specifications for an issue directive.",
+        "memory_tiers": ["SHORT_TERM", "MEDIUM_TERM", "LONG_TERM"],
+        "prompt_template": (
+            "Target Repo: {repo_name}\n"
+            "Issue #{issue_number}: {issue_title}\n"
+            "Operator Directive: {directive}\n"
+            "Repo Config: {repo_config}\n"
+            "Knowledge Base Context:\n"
+            " - Long-Term Directives: {ltm_directives}\n"
+            " - Medium-Term Lessons: {mtm_lessons}\n"
+            " - Short-Term Traces: {stm_traces}\n"
+            "Goal: Formulate code patches, validation test command, and progress summary for Alpha's Solved Problems."
+        ),
+    },
+    "progress_and_pause": {
+        "name": "Issue Progress Update and Guidance Pause",
+        "description": "Summarizes executed work, test results, branch/PR, and requests operator steering.",
+        "memory_tiers": ["SHORT_TERM", "LONG_TERM"],
+        "prompt_template": (
+            "Summarize implemented changes for {repo_name} #{issue_number}.\n"
+            "Include test outcomes, PR URL: {pr_url}, and specific questions pausing for @holman57."
+        ),
+    },
+    "knowledge_graph_compilation": {
+        "name": "Multi-Tier Memory Prompt Compilation",
+        "description": "Compiles and optimizes raw inputs and task telemetry into token-efficient prompts.",
+        "memory_tiers": ["SHORT_TERM", "MEDIUM_TERM", "LONG_TERM"],
+        "prompt_template": (
+            "Reference graph knowledge base (SQLite/Neo4j) across LTM, MTM, and STM to summarize context."
+        ),
+    },
 }
 
 # Dedicated architectural question threads

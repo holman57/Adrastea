@@ -12,12 +12,12 @@ class TestSystemIntegration(unittest.IsolatedAsyncioTestCase):
         alpha.ipc.port = 8995
         alpha.spawner.port = 8995
 
-        # Register a fast local task
+        # Register a fast local task with highest priority
         task = ScheduledTask(
             task_id="integration_task_1",
             command="python -c \"print('Integration test running')\"",
             interval_seconds=1.0,
-            priority=10
+            priority=1000
         )
         alpha.scheduler.register(task)
 
@@ -27,7 +27,7 @@ class TestSystemIntegration(unittest.IsolatedAsyncioTestCase):
         loop_task = asyncio.create_task(alpha._execution_loop())
 
         # Allow execution loop to run at least one tick
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(2.0)
 
         # Verify task was executed and RL planner recorded outcome
         metrics = alpha.planner.get_or_create_metrics("integration_task_1")

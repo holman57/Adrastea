@@ -16,6 +16,7 @@ from .llm_consultant import LLMConsultant
 from .mcp_client import MCPClient
 from .triage import TriageEngine
 from .tuner import HeuristicTuner
+from ..knowledge.prompt_compiler import CognitivePromptCompiler
 
 logger = logging.getLogger("Adrastea.Beta")
 
@@ -27,6 +28,7 @@ class BetaEngine:
         self.ipc = IPCClient(host=ipc_host, port=ipc_port)
         self.llm = LLMConsultant()
         self.mcp = MCPClient()
+        self.prompt_compiler = CognitivePromptCompiler()
         self.triage = TriageEngine(llm=self.llm)
         self.tuner = HeuristicTuner()
         self.discovery = GoalDiscovery(llm=self.llm)
@@ -163,9 +165,37 @@ class BetaEngine:
                             )
                         )
 
-                    # B. Dispatch execution task for Alpha
+                    # B. Compile Cognitive Prompt across Graph Memory and Consult LLM
+                    clean_repo = directive_repo.replace("holman57/", "").strip()
+                    compiled_prompt = self.prompt_compiler.compile_task_prompt(
+                        repo_name=clean_repo,
+                        issue_data={
+                            "number": issue_num or 0,
+                            "title": getattr(directive, "topic", "Operator Directive"),
+                            "body": str(directive),
+                            "author": getattr(directive, "author", "holman57"),
+                        },
+                    )
+                    logger.info(
+                        f"Beta compiled cognitive prompt for {clean_repo} #{issue_num} "
+                        f"({compiled_prompt['metadata']['estimated_tokens']} est tokens across memory tiers)"
+                    )
+
+                    # Consult LLM (Gemini or Local LLM via MCP)
+                    solution_plan = self.llm.consult(
+                        prompt=compiled_prompt["user_prompt"],
+                        system_prompt=compiled_prompt["system_prompt"],
+                    )
+                    logger.info(f"Beta synthesized solution plan for {clean_repo}: {solution_plan[:120]}...")
+
+                    # C. Dispatch execution task for Alpha via Solved Problems
                     safe_dir = str(directive).replace("'", "\\'")
-                    cmd = f'python -c "print(\'Executed user directive: {safe_dir}\')"'
+                    cmd = (
+                        f'python -c "'
+                        f'from adrastea.alpha.solved_problems import inspect_repository, fetch_repo_issues; '
+                        f'env = inspect_repository(\'{clean_repo}\'); '
+                        f'print(f\'Executed user directive for {clean_repo}: {safe_dir}\')"'
+                    )
                     await self.ipc.send(
                         Message(
                             signal=SignalType.SIG_DISPATCH,
@@ -179,6 +209,8 @@ class BetaEngine:
                                     "goal_id": goal_id,
                                     "repo": directive_repo,
                                     "issue_number": issue_num,
+                                    "solution_plan": solution_plan[:500],
+                                    "tokens": compiled_prompt["metadata"]["estimated_tokens"],
                                 }
                             }
                         )

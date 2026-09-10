@@ -76,8 +76,8 @@
       "last_ask_timestamp": 1789007731.5942507
     },
     "holman57/market-research#4": {
-      "wait_count": 0,
-      "last_ask_timestamp": 0.0
+      "wait_count": 1,
+      "last_ask_timestamp": 1789007732.5614011
     },
     "holman57/market-research#2": {
       "wait_count": 1,
@@ -89,15 +89,15 @@
     },
     "holman57/speech-flow#10": {
       "wait_count": 1,
-      "last_ask_timestamp": 1789007815.6363475
+      "last_ask_timestamp": 1789009989.4685922
     },
     "holman57/distributed-content-management#3": {
       "wait_count": 1,
       "last_ask_timestamp": 1789007737.7958615
     },
     "holman57/hardcode#2": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007815.6131315
+      "wait_count": 5,
+      "last_ask_timestamp": 1789010037.4032438
     },
     "holman57/hardcode#6": {
       "wait_count": 1,
@@ -108,8 +108,8 @@
       "last_ask_timestamp": 1789007677.1741116
     },
     "holman57/hardcode#4": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007678.2179494
+      "wait_count": 3,
+      "last_ask_timestamp": 1789009886.4073362
     },
     "holman57/speech-flow#2": {
       "wait_count": 1,
@@ -123,9 +123,13 @@
       "wait_count": 1,
       "last_ask_timestamp": 1789007739.0305798
     },
+    "1": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1788808739.0
+    },
     "8": {
       "wait_count": 0,
-      "last_ask_timestamp": 1789005792.0
+      "last_ask_timestamp": 1789007849.0
     },
     "7": {
       "wait_count": 0,
@@ -141,7 +145,7 @@
     },
     "4": {
       "wait_count": 0,
-      "last_ask_timestamp": 0.0
+      "last_ask_timestamp": 1788891687.0
     },
     "3": {
       "wait_count": 0,
@@ -149,7 +153,7 @@
     },
     "2": {
       "wait_count": 0,
-      "last_ask_timestamp": 1788891794.0
+      "last_ask_timestamp": 0.0
     }
   }
 }

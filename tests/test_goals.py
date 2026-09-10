@@ -18,6 +18,7 @@ from adrastea.alpha.goals.daily_github_commit import (
 from adrastea.alpha.goals.ecosystem_repos import EcosystemReposGoal
 from adrastea.alpha.goals.knowledge_graph import KnowledgeGraphMemoryGoal
 from adrastea.alpha.goals.manager import GoalManager
+from adrastea.alpha.goals.repo_feature_executor import RepoFeatureExecutorGoal
 from adrastea.alpha.goals.self_evolution import AdrasteaSelfEvolutionGoal
 from adrastea.alpha.goals.user_coordination import UserCoordinationGoal
 from adrastea.beta.tuner import HeuristicTuner
@@ -28,7 +29,7 @@ class TestAlphaGoals(unittest.TestCase):
 
     def test_default_goals_registration(self):
         manager = GoalManager()
-        self.assertEqual(len(manager.goals), 7)
+        self.assertEqual(len(manager.goals), 8)
         self.assertIn("adrastea_self_evolution", manager.goals)
         self.assertIn("user_coordination", manager.goals)
         self.assertIn("ecosystem_repos", manager.goals)
@@ -36,6 +37,7 @@ class TestAlphaGoals(unittest.TestCase):
         self.assertIn("daily_github_commit", manager.goals)
         self.assertIn("companion_feature_builder", manager.goals)
         self.assertIn("github_profile_promoter", manager.goals)
+        self.assertIn("repo_feature_executor", manager.goals)
 
     def test_self_evolution_goal_tasks(self):
         goal = AdrasteaSelfEvolutionGoal()
@@ -274,6 +276,13 @@ class TestAlphaGoals(unittest.TestCase):
             self.assertTrue(pr_res["success"])
             self.assertEqual(pr_res["pr_url"], "https://github.com/holman57/speech-flow/pull/15")
             self.assertEqual(pr_res["assignee"], "holman57")
+
+    def test_repo_feature_executor_goal_tasks(self):
+        goal = RepoFeatureExecutorGoal()
+        tasks = goal.generate_tasks()
+        self.assertGreaterEqual(len(tasks), 1)
+        self.assertTrue(any("repo_exec_" in t.task_id for t in tasks))
+        self.assertIn(tasks[0].metadata["repo"], goal.parameters["target_repos"])
 
 
 if __name__ == "__main__":

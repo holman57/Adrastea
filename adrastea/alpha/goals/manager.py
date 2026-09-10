@@ -9,6 +9,7 @@ from .daily_github_commit import DailyGitHubCommitGoal
 from .ecosystem_repos import EcosystemReposGoal
 from .github_profile_promoter import GitHubProfilePromoterGoal
 from .knowledge_graph import KnowledgeGraphMemoryGoal
+from .repo_feature_executor import RepoFeatureExecutorGoal
 from .self_evolution import AdrasteaSelfEvolutionGoal
 from .user_coordination import UserCoordinationGoal
 
@@ -31,6 +32,7 @@ class GoalManager:
         self.register_goal(DailyGitHubCommitGoal())
         self.register_goal(CompanionFeatureBuilderGoal())
         self.register_goal(GitHubProfilePromoterGoal())
+        self.register_goal(RepoFeatureExecutorGoal())
 
     def register_goal(self, goal: BaseGoal) -> None:
         self.goals[goal.goal_id] = goal

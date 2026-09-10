@@ -105,7 +105,7 @@ class ContactRelay:
                 "details": reason
             }
 
-        return self.topic_mgr._post_comment(issue_number, body_markdown)
+        return self.topic_mgr.post_response_to_issue(issue_number, body_markdown)
 
     def dispatch_all(
         self,
