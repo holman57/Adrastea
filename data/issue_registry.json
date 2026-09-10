@@ -3,34 +3,34 @@
     "adrastea_self_evolution": {
       "issue_number": 2,
       "title": "[Goal] Adrastea Self-Evolution & Repository Growth",
-      "last_synced": 1788888215.2312772
+      "last_synced": 1789005695.142976
     },
     "user_coordination": {
       "issue_number": 3,
       "title": "[Goal] User Coordination & Strategic Steering",
-      "last_synced": 1788888215.2312772
+      "last_synced": 1789005695.142976
     },
     "ecosystem_repos": {
       "issue_number": 4,
       "title": "[Goal] Companion AI-Managed Projects (speech-flow, interpretive-interface, distributed-content-management)",
-      "last_synced": 1788888215.2312772
+      "last_synced": 1789005695.142976
     },
     "knowledge_graph_memory": {
       "issue_number": 5,
       "title": "[Goal] Graph Knowledge Base & Multi-Tier Memory System (Neo4j / SQLite)",
-      "last_synced": 1788888215.2312772
+      "last_synced": 1789005695.142976
     }
   },
   "questions": {
     "speech_flow_audio_policy": {
       "issue_number": 6,
       "title": "[Question] Audio Output Policy & Speech-Flow Voice Bridge Configuration",
-      "last_synced": 1788888215.2312772
+      "last_synced": 1789005695.142976
     },
     "neo4j_connection_setup": {
       "issue_number": 7,
       "title": "[Question] Neo4j Connection & External Graph Synchronization Parameters",
-      "last_synced": 1788888215.2312772
+      "last_synced": 1789005695.142976
     }
   },
   "issue_to_target": {
@@ -65,5 +65,11 @@
       "title": "[Question] Neo4j Connection & External Graph Synchronization Parameters"
     }
   },
-  "last_synced": 1788888215.2312772
+  "last_synced": 1789005695.142976,
+  "wait_states": {
+    "9": {
+      "wait_count": 0,
+      "last_ask_timestamp": 1789005051.0
+    }
+  }
 }

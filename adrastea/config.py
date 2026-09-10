@@ -60,6 +60,11 @@ class Config:
     beta_idle_cycle_seconds: float = float(os.getenv("BETA_IDLE_CYCLE_SECONDS", "30.0"))
     beta_enable_mcp: bool = os.getenv("BETA_ENABLE_MCP", "true").lower() == "true"
 
+    # Issue Loop & Cadence Settings
+    issue_loop_interval_seconds: float = float(os.getenv("ADRASTEA_ISSUE_LOOP_SECONDS", "900.0"))
+    issue_wait_base_days: float = float(os.getenv("ADRASTEA_WAIT_BASE_DAYS", "2.0"))
+    issue_wait_max_days: float = float(os.getenv("ADRASTEA_WAIT_MAX_DAYS", "30.0"))
+
     # Local LLM (Ollama)
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3-coder:30b")

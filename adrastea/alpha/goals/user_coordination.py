@@ -20,7 +20,7 @@ class UserCoordinationGoal(BaseGoal):
             description="Continuously monitors directives, engages the primary operator (Luke) across notification channels, and solicits strategic guidance.",
             enabled=True,
             weight=1.5,
-            interval_seconds=240.0,
+            interval_seconds=getattr(config, "issue_loop_interval_seconds", 900.0),
             parameters={
                 "urgency_level": "normal",  # normal, high, aggressive
                 "require_response": False,
@@ -34,12 +34,27 @@ class UserCoordinationGoal(BaseGoal):
         tasks: List[ScheduledTask] = []
         base_priority = int(25 * self.weight)
 
-        # 1. Directive Checking Task (Checking DIRECTIVES.txt and GitHub Issue #1 comments)
+        # Dynamic load-adaptive interval adjustment (scaling up under heavy load)
+        try:
+            import psutil
+            cpu = psutil.cpu_percent(interval=None)
+            ram = psutil.virtual_memory().percent
+            base_interval = getattr(config, "issue_loop_interval_seconds", 900.0)
+            if cpu >= 75.0 or ram >= 85.0:
+                self.interval_seconds = max(base_interval * 4.0, 3600.0)
+            elif cpu >= 40.0 or ram >= 70.0:
+                self.interval_seconds = max(base_interval * 2.0, 1800.0)
+            else:
+                self.interval_seconds = base_interval
+        except Exception:
+            pass
+
+        # 1. Directive Checking Task (Checking DIRECTIVES.txt and GitHub issues)
         cmd_directives = (
             f'"{sys.executable}" -c '
             '"from adrastea.directives import DirectiveWatcher; '
             'w = DirectiveWatcher(); '
-            'd = w.check_directives(); '
+            'd = w.check_directives(force=True); '
             'print(\'DIRECTIVES_POLL: DIRECTIVE_FOUND:\', d) if d else print(\'DIRECTIVES_POLL: No new directives\')"'
         )
         tasks.append(

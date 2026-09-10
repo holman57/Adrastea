@@ -145,30 +145,50 @@ def cmd_issues(sync: bool = False):
     reg = mgr.registry
     print("=== ADRASTEA DECENTRALIZED GITHUB ISSUE THREADS ===")
     print("\n--- Autonomous Goals ---")
+    monitored_nums = set()
     for gid, gdata in reg.get("goals", {}).items():
         num = gdata["issue_number"]
+        monitored_nums.add(num)
         waiting, reason = mgr.is_waiting_for_user_response(num)
         status_str = "WAITING ON LUKE (@holman57)" if waiting else "SAFE TO RESPOND / ACTIVE"
         print(f"  Issue #{num:02d} | Goal: [{gid}]")
         print(f"    Title  : {gdata['title']}")
         print(f"    Status : {status_str}")
+        print(f"    Details: {reason}")
         print(f"    URL    : https://github.com/{mgr.repo}/issues/{num}\n")
 
     print("--- Architectural Questions ---")
     for qid, qdata in reg.get("questions", {}).items():
         num = qdata["issue_number"]
+        monitored_nums.add(num)
         waiting, reason = mgr.is_waiting_for_user_response(num)
         status_str = "WAITING ON LUKE (@holman57)" if waiting else "SAFE TO RESPOND / ACTIVE"
         print(f"  Issue #{num:02d} | Question: [{qid}]")
         print(f"    Title  : {qdata['title']}")
         print(f"    Status : {status_str}")
+        print(f"    Details: {reason}")
         print(f"    URL    : https://github.com/{mgr.repo}/issues/{num}\n")
+
+    # Check for any other open issues in the repo
+    open_issues = mgr.list_open_issues()
+    other_issues = [i for i in open_issues if int(i["number"]) not in monitored_nums]
+    if other_issues:
+        print("--- Other Monitored Repository Issues ---")
+        for oi in other_issues:
+            onum = int(oi["number"])
+            waiting, reason = mgr.is_waiting_for_user_response(onum)
+            status_str = "WAITING ON LUKE (@holman57)" if waiting else "SAFE TO RESPOND / ACTIVE"
+            print(f"  Issue #{onum:02d} | User / Direct Directive Thread")
+            print(f"    Title  : {oi.get('title', '')}")
+            print(f"    Status : {status_str}")
+            print(f"    Details: {reason}")
+            print(f"    URL    : https://github.com/{mgr.repo}/issues/{onum}\n")
 
 
 def cmd_directives():
     from .directives import DirectiveWatcher
     watcher = DirectiveWatcher()
-    directive = watcher.check_directives()
+    directive = watcher.check_directives(force=True)
     print("=== ADRASTEA DIRECTIVES CHECK ===")
     if directive:
         print("Directive DETECTED:")
