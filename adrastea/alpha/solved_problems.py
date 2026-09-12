@@ -644,12 +644,12 @@ def provide_autonomous_guidance(
     guidance = consultant.consult(
         prompt=prompt,
         system_prompt="You are Adrastea's cognitive strategy engine. Produce concrete, production-grade technical decisions.",
-        preferred_provider="gemini",
+        preferred_provider="balanced",
     )
 
     guidance_comment = (
-        f"### [Adrastea Autonomous Guidance Adopted via Gemini]\n\n"
-        f"In accordance with @holman57's high-autonomy directive, Adrastea has consulted **Gemini** to formulate authoritative strategic guidance and unblock autonomous execution on this thread:\n\n"
+        f"### [Adrastea Autonomous Guidance Adopted]\n\n"
+        f"In accordance with @holman57's high-autonomy directive, Adrastea has formulated authoritative strategic guidance via its cognitive engine to unblock autonomous execution on this thread:\n\n"
         f"{guidance}\n\n"
         f"---\n"
         f"**Execution Status:** Autonomous implementation is active. Adrastea will develop and test changes in this cycle."

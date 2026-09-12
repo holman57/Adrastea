@@ -72,9 +72,17 @@ class Config:
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3-coder:30b")
 
-    # Frontier / Cloud LLM (Gemini)
+    # Frontier / Cloud LLM (Gemini) Usage & Quota Controls
     gemini_api_key: Optional[str] = os.getenv("GEMINI_API_KEY", None)
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_enabled: bool = os.getenv("GEMINI_ENABLED", "true").lower() == "true"
+    gemini_routing_mode: str = os.getenv("GEMINI_ROUTING_MODE", "balanced")  # "local_first", "balanced", "cloud_first"
+    gemini_max_requests_per_minute: int = int(os.getenv("GEMINI_MAX_RPM", "4"))
+    gemini_max_requests_per_hour: int = int(os.getenv("GEMINI_MAX_RPH", "20"))
+    gemini_max_requests_per_day: int = int(os.getenv("GEMINI_MAX_RPD", "60"))
+    gemini_min_interval_seconds: float = float(os.getenv("GEMINI_MIN_INTERVAL_SECONDS", "10.0"))
+    gemini_circuit_breaker_cooldown_seconds: float = float(os.getenv("GEMINI_CIRCUIT_BREAKER_COOLDOWN", "900.0"))  # 15 mins
+    gemini_cache_ttl_seconds: float = float(os.getenv("GEMINI_CACHE_TTL_SECONDS", "7200.0"))  # 2 hours
 
     # Notification Recipients (Configured via .env or environment variables; never hardcoded)
     target_email: Optional[str] = field(default_factory=lambda: os.getenv("NOTIFICATION_TARGET_EMAIL", None))

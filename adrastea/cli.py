@@ -212,11 +212,44 @@ def cmd_directives():
         print("No new directives found across DIRECTIVES.txt or monitored GitHub issues.")
 
 
+def cmd_gemini_usage():
+    from .beta.gemini_governor import gemini_governor
+    summary = gemini_governor.get_usage_summary()
+    print("=== ADRASTEA GEMINI USAGE & QUOTA GOVERNOR ===")
+    print(f"Gemini Enabled       : {summary['gemini_enabled']}")
+    print(f"Model                : {summary['model']}")
+    print(f"Routing Mode         : {summary['routing_mode']}")
+
+    cb = summary["circuit_breaker"]
+    if cb["active"]:
+        print(f"Circuit Breaker      : 🚨 ACTIVE (Cooldown remaining: {cb['cooldown_remaining_seconds']}s)")
+        print(f"Cooldown Reason      : {cb['reason']}")
+    else:
+        print(f"Circuit Breaker      : Operational (Inactive)")
+
+    req = summary["requests"]
+    print(f"\n--- Request Quotas & Budgets ---")
+    print(f"Today's Requests     : {req['today']} / {req['daily_budget']} (Remaining: {req['daily_remaining']})")
+    print(f"This Hour's Requests : {req['this_hour']} / {req['hourly_budget']} (Remaining: {req['hourly_remaining']})")
+    print(f"Pacing / Limit       : Max {req['max_rpm']} RPM")
+    print(f"Lifetime Requests    : {req['total_lifetime']}")
+
+    tok = summary["tokens"]
+    print(f"\n--- Estimated Token Consumption ---")
+    print(f"Input Tokens         : ~{tok['total_estimated_input']:,}")
+    print(f"Output Tokens        : ~{tok['total_estimated_output']:,}")
+    print(f"Total Tokens         : ~{tok['total_estimated']:,}")
+
+    print(f"\n--- Response Cache ---")
+    print(f"Cached Responses     : {summary['cache']['cached_entries']}")
+    print(f"Local Ollama Fallback: {config.ollama_model} ({config.ollama_base_url})")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Adrastea Autonomous Orchestrator")
     parser.add_argument(
         "command",
-        choices=["start", "keepalive", "ping", "wake", "sleep", "notify", "test-llm", "status", "goals", "knowledge", "issues", "directives", "cleanup-issues"],
+        choices=["start", "keepalive", "ping", "wake", "sleep", "notify", "test-llm", "status", "goals", "knowledge", "issues", "directives", "cleanup-issues", "gemini-usage"],
         default="start",
         nargs="?"
     )
@@ -273,6 +306,8 @@ def main():
             print(f"  - [{di['repo']}] #{di['issue_number']}: {di['title']}")
         print(f"Total Comments Edited (In-Place Summaries): {res.get('total_comments_edited', 0)}")
         print(f"Total Duplicate/Noise Comments Deleted: {res.get('total_comments_deleted', 0)}")
+    elif args.command == "gemini-usage":
+        cmd_gemini_usage()
     elif args.command == "status":
         print(f"Target Email: {mask_sensitive_value(config.target_email)}")
         print(f"Target Phone: {mask_sensitive_value(config.target_phone)}")
@@ -280,10 +315,13 @@ def main():
         print(f"IPC: {config.ipc_host}:{config.ipc_port}")
         from .alpha.goals.manager import GoalManager
         from .knowledge.memory_manager import MemoryManager
+        from .beta.gemini_governor import gemini_governor
         gm = GoalManager()
         mm = MemoryManager()
+        summary = gemini_governor.get_usage_summary()
         print(f"Autonomous Goals: {len(gm.goals)} active")
         print(f"Knowledge Graph: {mm.get_summary().get('total_nodes')} nodes, {mm.get_summary().get('total_relationships')} edges")
+        print(f"Gemini Usage: {summary['requests']['today']}/{summary['requests']['daily_budget']} requests today (Circuit Breaker: {'ACTIVE' if summary['circuit_breaker']['active'] else 'OK'})")
 
 
 if __name__ == "__main__":
