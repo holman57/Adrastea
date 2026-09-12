@@ -415,6 +415,15 @@ def post_or_update_growth_issue(
     - If the issue does not exist: creates it and assigns it to Luke Holman (holman57).
     - If the issue exists: updates the issue body with the latest overview and appends a dispatch comment.
     """
+    clean_repo = repo_name.split("/")[-1] if "/" in repo_name else repo_name
+    if clean_repo != "Adrastea":
+        logger.warning(f"Growth Strategy issues are strictly restricted to Adrastea. Skipping {repo_name}.")
+        return {
+            "action": "skipped",
+            "reason": "Growth Strategy issue is strictly confined to Adrastea.",
+            "repo": repo_name,
+        }
+
     audit = audit_github_profile_and_repos(user=target_user)
     markdown_content = generate_growth_dispatch_markdown(repo_name, audit)
     full_repo = f"{target_user}/{repo_name}"
@@ -472,14 +481,9 @@ def post_or_update_growth_issue(
                 errors="replace",
                 check=True,
             )
-            subprocess.run(
-                ["gh", "issue", "comment", str(issue_number), "--repo", full_repo, "--body", markdown_content],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=True,
-            )
+            from ...notifications.issue_manager import IssueCorrespondenceManager
+            mgr = IssueCorrespondenceManager(repo=full_repo)
+            mgr.post_response_to_issue(issue_number, markdown_content, force=True)
             return {
                 "action": "updated",
                 "repo": full_repo,
@@ -572,11 +576,6 @@ class GitHubProfilePromoterGoal(BaseGoal):
                 "target_user": TARGET_USER,
                 "target_repos": [
                     "Adrastea",
-                    "distributed-content-management",
-                    "market-research",
-                    "speech-flow",
-                    "interpretive-interface",
-                    "hardcode",
                 ],
                 "auto_post_issues": True,
             },
@@ -584,12 +583,7 @@ class GitHubProfilePromoterGoal(BaseGoal):
         self._current_index = 0
 
     def _select_target_repo(self) -> str:
-        repos = self.parameters.get("target_repos", ["Adrastea"])
-        if not repos:
-            return "Adrastea"
-        selected = repos[self._current_index % len(repos)]
-        self._current_index += 1
-        return selected
+        return "Adrastea"
 
     def generate_tasks(self, context: Optional[Dict[str, Any]] = None) -> List[ScheduledTask]:
         now = (context.get("now") if context and "now" in context else time.time())
@@ -656,16 +650,19 @@ def main():
         return
 
     if args.all:
-        goal = GitHubProfilePromoterGoal()
-        for repo in goal.parameters.get("target_repos", []):
-            print(f"[*] Posting growth strategy issue for {args.user}/{repo}...")
-            res = post_or_update_growth_issue(repo, args.user)
-            print(f"  -> Result: {res}")
+        print(f"[*] Posting growth strategy issue for {args.user}/Adrastea...")
+        res = post_or_update_growth_issue("Adrastea", args.user)
+        print(f"  -> Result: {res}")
         return
 
     if args.post:
-        print(f"[*] Posting growth strategy issue for {args.user}/{args.repo}...")
-        res = post_or_update_growth_issue(args.repo, args.user)
+        target = args.repo
+        clean_target = target.split("/")[-1] if "/" in target else target
+        if clean_target != "Adrastea":
+            print(f"[-] Refusing to post growth strategy to {target}: strictly confined to Adrastea.")
+            return
+        print(f"[*] Posting growth strategy issue for {args.user}/{target}...")
+        res = post_or_update_growth_issue(target, args.user)
         print(f"[+] Result: {res}")
         return
 

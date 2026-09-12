@@ -311,7 +311,7 @@ def scan_and_converse_in_issues(
                     f"  3. Work will be staged on a dedicated branch and submitted via Pull Request.\n\n"
                     f"Standing by for further instructions."
                 )
-                post_res = mgr.post_response_to_issue(num, reply_md, force=True)
+                post_res = mgr.post_response_to_issue(num, reply_md, force=True, comments=comments)
                 if post_res.get("success"):
                     actions_taken.append(f"replied_to_guidance_#{num}")
                     logger.info(f"Replied to operator guidance on {github_repo} #{num}")
@@ -343,7 +343,7 @@ def scan_and_converse_in_issues(
                         f"  - Updates and proposed PRs will be linked directly to this thread.\n\n"
                         f"Standing by for your steering."
                     )
-                    post_res = mgr.post_response_to_issue(num, reply_md, force=True)
+                    post_res = mgr.post_response_to_issue(num, reply_md, force=True, comments=[])
                     if post_res.get("success"):
                         actions_taken.append(f"replied_to_new_issue_#{num}")
                         logger.info(f"Replied to new issue #{num} on {github_repo}")

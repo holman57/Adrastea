@@ -81,6 +81,7 @@ class TestKeepAlive(unittest.IsolatedAsyncioTestCase):
     async def test_sleep_interrupted_by_dispatched_task(self):
         port = 9104
         alpha = AlphaEngine()
+        alpha.goal_manager.goals.clear()
         alpha.ipc.port = port
         alpha.spawner.port = port
         await alpha.ipc.start()
@@ -121,9 +122,7 @@ class TestKeepAlive(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(metrics.execution_count, 1)
 
         await client.disconnect()
-        alpha._running = False
-        loop_task.cancel()
-        await alpha.ipc.stop()
+        await alpha.stop()
 
     async def test_beta_engine_sleep_and_wake(self):
         port = 9105

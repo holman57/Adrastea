@@ -14,6 +14,16 @@ from .sanitizer import SensitiveDataFilter, mask_sensitive_value
 
 
 def setup_logging(verbose: bool = False):
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     level = logging.DEBUG if verbose else logging.INFO
     sensitive_filter = SensitiveDataFilter()
     console_handler = logging.StreamHandler(sys.stdout)
@@ -206,7 +216,7 @@ def main():
     parser = argparse.ArgumentParser(description="Adrastea Autonomous Orchestrator")
     parser.add_argument(
         "command",
-        choices=["start", "keepalive", "ping", "wake", "sleep", "notify", "test-llm", "status", "goals", "knowledge", "issues", "directives"],
+        choices=["start", "keepalive", "ping", "wake", "sleep", "notify", "test-llm", "status", "goals", "knowledge", "issues", "directives", "cleanup-issues"],
         default="start",
         nargs="?"
     )
@@ -253,6 +263,16 @@ def main():
         cmd_issues(sync=args.sync)
     elif args.command == "directives":
         cmd_directives()
+    elif args.command == "cleanup-issues":
+        from .notifications.issue_manager import cleanup_all_repos_comment_noise
+        print("Starting comprehensive GitHub issues & comment noise cleanup across all target repositories...")
+        res = cleanup_all_repos_comment_noise()
+        print("\n=== CLEANUP COMPLETED ===")
+        print(f"Deleted Growth Strategy Issues outside Adrastea: {len(res.get('deleted_issues', []))}")
+        for di in res.get("deleted_issues", []):
+            print(f"  - [{di['repo']}] #{di['issue_number']}: {di['title']}")
+        print(f"Total Comments Edited (In-Place Summaries): {res.get('total_comments_edited', 0)}")
+        print(f"Total Duplicate/Noise Comments Deleted: {res.get('total_comments_deleted', 0)}")
     elif args.command == "status":
         print(f"Target Email: {mask_sensitive_value(config.target_email)}")
         print(f"Target Phone: {mask_sensitive_value(config.target_phone)}")

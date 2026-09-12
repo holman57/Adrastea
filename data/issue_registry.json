@@ -1,147 +1,55 @@
 {
-  "goals": {
-    "adrastea_self_evolution": {
-      "issue_number": 2,
-      "title": "[Goal] Adrastea Self-Evolution & Repository Growth",
-      "last_synced": 1789005695.142976
-    },
-    "user_coordination": {
-      "issue_number": 3,
-      "title": "[Goal] User Coordination & Strategic Steering",
-      "last_synced": 1789005695.142976
-    },
-    "ecosystem_repos": {
-      "issue_number": 4,
-      "title": "[Goal] Companion AI-Managed Projects (speech-flow, interpretive-interface, distributed-content-management)",
-      "last_synced": 1789005695.142976
-    },
-    "knowledge_graph_memory": {
-      "issue_number": 5,
-      "title": "[Goal] Graph Knowledge Base & Multi-Tier Memory System (Neo4j / SQLite)",
-      "last_synced": 1789005695.142976
-    }
-  },
-  "questions": {
-    "speech_flow_audio_policy": {
-      "issue_number": 6,
-      "title": "[Question] Audio Output Policy & Speech-Flow Voice Bridge Configuration",
-      "last_synced": 1789005695.142976
-    },
-    "neo4j_connection_setup": {
-      "issue_number": 7,
-      "title": "[Question] Neo4j Connection & External Graph Synchronization Parameters",
-      "last_synced": 1789005695.142976
-    }
-  },
-  "issue_to_target": {
-    "2": {
-      "type": "goal",
-      "id": "adrastea_self_evolution",
-      "title": "[Goal] Adrastea Self-Evolution & Repository Growth"
-    },
-    "3": {
-      "type": "goal",
-      "id": "user_coordination",
-      "title": "[Goal] User Coordination & Strategic Steering"
-    },
-    "4": {
-      "type": "goal",
-      "id": "ecosystem_repos",
-      "title": "[Goal] Companion AI-Managed Projects (speech-flow, interpretive-interface, distributed-content-management)"
-    },
-    "5": {
-      "type": "goal",
-      "id": "knowledge_graph_memory",
-      "title": "[Goal] Graph Knowledge Base & Multi-Tier Memory System (Neo4j / SQLite)"
-    },
-    "6": {
-      "type": "question",
-      "id": "speech_flow_audio_policy",
-      "title": "[Question] Audio Output Policy & Speech-Flow Voice Bridge Configuration"
-    },
-    "7": {
-      "type": "question",
-      "id": "neo4j_connection_setup",
-      "title": "[Question] Neo4j Connection & External Graph Synchronization Parameters"
-    }
-  },
-  "last_synced": 1789005695.142976,
+  "goals": {},
+  "questions": {},
+  "issue_to_target": {},
   "wait_states": {
-    "9": {
+    "holman57/speech-flow#4": {
       "wait_count": 0,
-      "last_ask_timestamp": 1789005051.0
-    },
-    "holman57/market-research#5": {
-      "wait_count": 3,
-      "last_ask_timestamp": 1789010810.998666
-    },
-    "holman57/market-research#4": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789010174.7323022
-    },
-    "holman57/market-research#2": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007733.5750046
-    },
-    "holman57/market-research#1": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007734.4664235
-    },
-    "holman57/speech-flow#10": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789011194.7807415
-    },
-    "holman57/distributed-content-management#3": {
-      "wait_count": 3,
-      "last_ask_timestamp": 1789010872.760592
+      "last_ask_timestamp": 0.0
     },
     "holman57/hardcode#2": {
-      "wait_count": 3,
-      "last_ask_timestamp": 1789011239.5477345
-    },
-    "holman57/hardcode#6": {
       "wait_count": 1,
-      "last_ask_timestamp": 1789007676.2173142
-    },
-    "holman57/hardcode#5": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789007677.1741116
-    },
-    "holman57/hardcode#4": {
-      "wait_count": 3,
-      "last_ask_timestamp": 1789009886.4073362
+      "last_ask_timestamp": 1789245905.3519151
     },
     "holman57/speech-flow#2": {
-      "wait_count": 3,
-      "last_ask_timestamp": 1789010767.902084
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
     },
-    "holman57/interpretive-interface#2": {
-      "wait_count": 3,
-      "last_ask_timestamp": 1789010909.6199303
+    "holman57/market-research#7": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
     },
-    "holman57/distributed-content-management#1": {
-      "wait_count": 3,
-      "last_ask_timestamp": 1789010871.5972402
+    "holman57/market-research#4": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
     },
-    "1": {
-      "wait_count": 1,
-      "last_ask_timestamp": 1789010126.1684294
+    "holman57/market-research#2": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/distributed-content-management#6": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/distributed-content-management#5": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
     },
     "8": {
       "wait_count": 0,
-      "last_ask_timestamp": 1789007849.0
+      "last_ask_timestamp": 0.0
     },
     "7": {
       "wait_count": 0,
-      "last_ask_timestamp": 1788892166.0
+      "last_ask_timestamp": 0.0
     },
     "6": {
       "wait_count": 0,
-      "last_ask_timestamp": 1788891530.0
+      "last_ask_timestamp": 0.0
     },
     "5": {
       "wait_count": 0,
-      "last_ask_timestamp": 1788891580.0
+      "last_ask_timestamp": 0.0
     },
     "4": {
       "wait_count": 0,
@@ -149,11 +57,60 @@
     },
     "3": {
       "wait_count": 0,
-      "last_ask_timestamp": 1788891740.0
+      "last_ask_timestamp": 0.0
     },
     "2": {
       "wait_count": 0,
       "last_ask_timestamp": 0.0
+    },
+    "holman57/hardcode#15": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/hardcode#10": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/hardcode#9": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/hardcode#8": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/hardcode#6": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/hardcode#5": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/market-research#1": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/interpretive-interface#5": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/interpretive-interface#4": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "9": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
+    },
+    "holman57/speech-flow#10": {
+      "wait_count": 1,
+      "last_ask_timestamp": 1789245904.8468933
+    },
+    "1": {
+      "wait_count": 0,
+      "last_ask_timestamp": 0.0
     }
-  }
+  },
+  "last_synced": 0.0
 }

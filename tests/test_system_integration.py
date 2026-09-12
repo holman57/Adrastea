@@ -12,6 +12,9 @@ class TestSystemIntegration(unittest.IsolatedAsyncioTestCase):
         alpha.ipc.port = 8995
         alpha.spawner.port = 8995
 
+        # Clear default goals for isolated unit test
+        alpha.goal_manager.goals.clear()
+
         # Register a fast local task with highest priority
         task = ScheduledTask(
             task_id="integration_task_1",
@@ -40,9 +43,7 @@ class TestSystemIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertIn("integration_task_1", status["telemetry"]["task_scores"])
 
         # Clean shutdown
-        alpha._running = False
-        loop_task.cancel()
-        await alpha.ipc.stop()
+        await alpha.stop()
         self.assertFalse(alpha._running)
 
 

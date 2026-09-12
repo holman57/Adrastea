@@ -27,8 +27,13 @@ class TestGitHubProfilePromoterGoal(unittest.TestCase):
         self.assertTrue(self.goal.enabled)
         self.assertEqual(self.goal.weight, 1.3)
         self.assertEqual(self.goal.interval_seconds, 1800.0)
-        self.assertIn("Adrastea", self.goal.parameters.get("target_repos", []))
-        self.assertIn("market-research", self.goal.parameters.get("target_repos", []))
+        self.assertEqual(self.goal.parameters.get("target_repos", []), ["Adrastea"])
+        self.assertEqual(self.goal._select_target_repo(), "Adrastea")
+
+    def test_post_growth_issue_rejected_outside_adrastea(self):
+        res = post_or_update_growth_issue("hardcode")
+        self.assertEqual(res["action"], "skipped")
+        self.assertIn("strictly confined to Adrastea", res["reason"])
 
     def test_goal_registered_in_manager(self):
         manager = GoalManager()

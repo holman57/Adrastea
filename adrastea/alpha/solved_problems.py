@@ -14,6 +14,7 @@ from ..notifications.issue_manager import IssueCorrespondenceManager, AUTHORIZED
 logger = logging.getLogger("Adrastea.Alpha.SolvedProblems")
 
 TARGET_REPOS = [
+    "Adrastea",
     "hardcode",
     "speech-flow",
     "market-research",
@@ -25,7 +26,8 @@ TARGET_REPOS = [
 def get_repo_path(repo_name: str, workspace_dir: Optional[Path] = None) -> Path:
     """Resolve absolute local path for a target companion repository."""
     root = workspace_dir or config.companion_workspace_dir
-    return root / repo_name
+    clean_name = repo_name.split("/")[-1] if "/" in repo_name else repo_name
+    return root / clean_name
 
 
 def inspect_repository(repo_name: str, workspace_dir: Optional[Path] = None) -> Dict[str, Any]:
@@ -176,6 +178,7 @@ def fetch_repo_issues(repo_name: str, operator: str = AUTHORIZED_OPERATOR) -> Di
         "waiting_count": len(waiting_issues),
         "actionable_issues": actionable_issues,
         "waiting_issues": waiting_issues,
+        "all_open_issues": open_issues,
     }
 
 
@@ -670,21 +673,22 @@ def auto_steer_target_repository(
     """Scans open issues on target repository. If an issue is waiting and 10 minutes have elapsed,
     or if an issue has no open questions, automatically provides autonomous guidance and unlocks it.
     """
-    github_repo = f"holman57/{repo_name}" if "/" not in repo_name else repo_name
+    clean_repo = repo_name.split("/")[-1] if "/" in repo_name else repo_name
+    github_repo = f"holman57/{clean_repo}"
     mgr = IssueCorrespondenceManager(repo=github_repo)
-    issues_res = fetch_repo_issues(repo_name, workspace_dir)
+    issues_res = fetch_repo_issues(clean_repo)
 
     steered = []
     for issue in issues_res.get("all_open_issues", []):
         num = issue["number"]
         waiting, reason = mgr.is_waiting_for_user_response(num, issue_data=issue)
         if not waiting and "expired" in reason.lower():
-            res = provide_autonomous_guidance(repo_name, num, issue_data=issue, workspace_dir=workspace_dir)
+            res = provide_autonomous_guidance(clean_repo, num, issue_data=issue, workspace_dir=workspace_dir)
             if res.get("success"):
                 steered.append(num)
 
     return {
-        "repo": repo_name,
+        "repo": clean_repo,
         "steered_issues": steered,
         "count": len(steered),
     }

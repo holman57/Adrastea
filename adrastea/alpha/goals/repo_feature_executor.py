@@ -35,7 +35,7 @@ class RepoFeatureExecutorGoal(BaseGoal):
             goal_id="repo_feature_executor",
             name="Target Repository Feature Execution & Solved Problems Loop",
             description=(
-                "Loops through target repos (hardcode, speech-flow, market-research, interpretive-interface, "
+                "Loops through target repos (Adrastea, hardcode, speech-flow, market-research, interpretive-interface, "
                 "distributed-content-management), reads repo configs and issue directives, offloads procedural tasks "
                 "as Solved Problems to Alpha, executes features, and pauses for Luke's guidance."
             ),
@@ -82,6 +82,24 @@ class RepoFeatureExecutorGoal(BaseGoal):
                     "goal_id": self.goal_id,
                     "repo": target_repo,
                     "intent": "Target Repository Solved Problems Inspection",
+                },
+            )
+        )
+
+        # Task 2: Full snapshot and loop through all target repositories
+        cmd_loop = (
+            f'"{sys.executable}" -m adrastea.alpha.solved_problems loop'
+        )
+        tasks.append(
+            ScheduledTask(
+                task_id=f"repo_exec_loop_all_{int(now)}",
+                command=cmd_loop,
+                priority=base_priority + 5,
+                interval_seconds=None,
+                metadata={
+                    "goal_id": self.goal_id,
+                    "repo": target_repo,
+                    "intent": "Target Repositories Full Loop Snapshot",
                 },
             )
         )

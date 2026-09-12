@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -61,14 +62,14 @@ class LocalProgramRunner:
                 exit_code = proc.returncode if proc.returncode is not None else 0
             except asyncio.TimeoutError:
                 logger.warning(f"Task [{task_id}] timed out after {timeout}s. Terminating...")
-                proc.kill()
+                self._kill_process(proc)
                 await proc.wait()
                 stderr_str = f"Task timed out after {timeout} seconds."
                 exit_code = -99
             except asyncio.CancelledError:
                 logger.warning(f"Task [{task_id}] execution cancelled. Terminating...")
                 interrupted = True
-                proc.kill()
+                self._kill_process(proc)
                 await proc.wait()
                 exit_code = -98
                 raise
@@ -98,13 +99,31 @@ class LocalProgramRunner:
         logger.info(f"Task [{task_id}] finished in {result.duration_seconds}s with exit code {exit_code}")
         return result
 
+    def _kill_process(self, proc: asyncio.subprocess.Process) -> None:
+        """Kill a subprocess and its entire process tree on Windows/POSIX."""
+        try:
+            if sys.platform == "win32" and proc.pid:
+                import subprocess
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    timeout=2,
+                )
+            else:
+                proc.kill()
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
     async def interrupt(self, task_id: str) -> bool:
         """Interrupt / kill an in-flight task by ID."""
         proc = self.active_processes.get(task_id)
         if proc and proc.returncode is None:
             logger.warning(f"Interrupting in-flight task [{task_id}]")
             try:
-                proc.kill()
+                self._kill_process(proc)
                 await proc.wait()
                 return True
             except Exception as e:

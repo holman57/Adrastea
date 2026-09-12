@@ -72,4 +72,18 @@ def get_default_scheduled_tasks() -> List[ScheduledTask]:
         )
     )
 
+    # 5. Target Repositories Loop Task (Runs immediately on startup, then every 300 seconds)
+    cmd_repo_loop = (
+        f'"{sys.executable}" -m adrastea.alpha.solved_problems loop'
+    )
+    tasks.append(
+        ScheduledTask(
+            task_id="target_repositories_loop",
+            command=cmd_repo_loop,
+            interval_seconds=300.0,
+            priority=35,
+            metadata={"description": "Continuously loops through all target repositories, evaluating open issues and readiness"}
+        )
+    )
+
     return tasks

@@ -455,6 +455,12 @@ class AlphaEngine:
         self._running = False
         if self._loop_task:
             self._loop_task.cancel()
+        # Interrupt any in-flight runner tasks
+        for task_id in list(self.runner.active_processes.keys()):
+            try:
+                await self.runner.interrupt(task_id)
+            except Exception:
+                pass
         # Shutdown Beta
         await self.spawner.shutdown()
         # Shutdown IPC

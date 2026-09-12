@@ -721,11 +721,62 @@ class IssueCorrespondenceManager:
         """Lookup target goal or question metadata for an issue number."""
         return self.registry.get("issue_to_target", {}).get(str(issue_number))
 
-    def get_issue_comments(self, issue_number: int) -> List[Dict[str, Any]]:
-        """Fetch comments for an issue."""
+    def get_paginated_issue_comments(self, issue_number: int, repo: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch all comments for an issue using pagination via GitHub API, normalizing keys."""
+        target_repo = repo or self.repo
         try:
             res = subprocess.run(
-                ["gh", "issue", "view", str(issue_number), "--repo", self.repo, "--json", "comments"],
+                ["gh", "api", "--paginate", f"repos/{target_repo}/issues/{issue_number}/comments"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                raw = res.stdout.strip()
+                comments = []
+                decoder = json.JSONDecoder()
+                idx = 0
+                while idx < len(raw):
+                    raw_slice = raw[idx:].lstrip()
+                    if not raw_slice:
+                        break
+                    try:
+                        obj, end_idx = decoder.raw_decode(raw_slice)
+                        if isinstance(obj, dict) and "comments" in obj:
+                            comments.extend(obj["comments"])
+                        elif isinstance(obj, list):
+                            comments.extend(obj)
+                        elif isinstance(obj, dict):
+                            comments.append(obj)
+                        idx += (len(raw[idx:]) - len(raw_slice)) + end_idx
+                    except Exception:
+                        break
+
+                normalized = []
+                for c in comments:
+                    user_login = ""
+                    if isinstance(c.get("author"), dict):
+                        user_login = c["author"].get("login", "")
+                    elif isinstance(c.get("user"), dict):
+                        user_login = c["user"].get("login", "")
+                    elif isinstance(c.get("author"), str):
+                        user_login = c["author"]
+
+                    norm_c = dict(c)
+                    norm_c["author"] = {"login": user_login}
+                    norm_c["body"] = c.get("body", "")
+                    norm_c["id"] = c.get("id")
+                    normalized.append(norm_c)
+                return normalized
+        except Exception as e:
+            logger.debug(f"Failed to fetch paginated comments for #{issue_number} on {target_repo}: {e}")
+
+        # Fallback to standard gh issue view if gh api failed
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "view", str(issue_number), "--repo", target_repo, "--json", "comments"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -736,21 +787,216 @@ class IssueCorrespondenceManager:
                 data = json.loads(res.stdout)
                 return data.get("comments", [])
         except Exception as e:
-            logger.debug(f"Failed to fetch comments for issue #{issue_number}: {e}")
+            logger.debug(f"Fallback fetch comments failed for #{issue_number}: {e}")
+
         return []
+
+    def get_issue_comments(self, issue_number: int, repo: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch comments for an issue (paginated)."""
+        return self.get_paginated_issue_comments(issue_number, repo=repo)
+
+    def edit_issue_comment(self, comment_id: Any, body_markdown: str, repo: Optional[str] = None) -> bool:
+        """Edits an existing comment in-place on GitHub."""
+        target_repo = repo or self.repo
+        try:
+            res = subprocess.run(
+                [
+                    "gh", "api",
+                    "--method", "PATCH",
+                    f"repos/{target_repo}/issues/comments/{comment_id}",
+                    "-f", f"body={body_markdown}",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=20,
+            )
+            if res.returncode == 0:
+                logger.info(f"Edited comment #{comment_id} on {target_repo}")
+                return True
+            logger.warning(f"Failed to edit comment #{comment_id} on {target_repo}: {res.stderr.strip()}")
+            return False
+        except Exception as e:
+            logger.error(f"Error editing comment #{comment_id} on {target_repo}: {e}")
+            return False
+
+    def delete_issue_comment(self, comment_id: Any, repo: Optional[str] = None) -> bool:
+        """Permanently deletes a comment on GitHub."""
+        target_repo = repo or self.repo
+        try:
+            res = subprocess.run(
+                [
+                    "gh", "api",
+                    "--method", "DELETE",
+                    f"repos/{target_repo}/issues/comments/{comment_id}",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=20,
+            )
+            if res.returncode == 0:
+                logger.info(f"Deleted comment #{comment_id} on {target_repo}")
+                return True
+            logger.warning(f"Failed to delete comment #{comment_id} on {target_repo}: {res.stderr.strip()}")
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting comment #{comment_id} on {target_repo}: {e}")
+            return False
+
+    def get_conversation_turns(self, comments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Splits comments into conversational turns initiated by @holman57 or issue inception."""
+        turns: List[Dict[str, Any]] = []
+        current_turn: Dict[str, Any] = {
+            "turn_index": 0,
+            "user_comment": None,
+            "adrastea_comments": [],
+            "other_comments": [],
+        }
+        turns.append(current_turn)
+
+        for c in comments:
+            body = c.get("body", "")
+            author_obj = c.get("author") or c.get("user") or {}
+            author = author_obj.get("login", "") if isinstance(author_obj, dict) else str(author_obj)
+
+            is_adr = self.is_adrastea_content(body, author)
+            is_op = (author.lower() == AUTHORIZED_OPERATOR.lower()) and not is_adr
+
+            if is_op:
+                current_turn = {
+                    "turn_index": len(turns),
+                    "user_comment": c,
+                    "adrastea_comments": [],
+                    "other_comments": [],
+                }
+                turns.append(current_turn)
+            elif is_adr:
+                current_turn["adrastea_comments"].append(c)
+            else:
+                current_turn["other_comments"].append(c)
+
+        return turns
+
+    def _synthesize_adrastea_comments(
+        self,
+        adrastea_comments: List[Dict[str, Any]],
+        user_comment: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Synthesizes multiple Adrastea comments in a turn into a single coherent, authoritative reply block."""
+        if not adrastea_comments:
+            return "### [Adrastea Autonomous Response & State Summary]\n\nAutonomous monitoring active."
+
+        if len(adrastea_comments) == 1:
+            body = adrastea_comments[0].get("body", "").strip()
+            if not body.startswith("### [Adrastea"):
+                body = f"### [Adrastea Autonomous Response & State Summary]\n\n{body}"
+            return body
+
+        architectural_decisions = []
+        roadmap_items = []
+        open_questions = []
+        execution_status = "Autonomous implementation active & verified."
+
+        for comm in adrastea_comments:
+            b = comm.get("body", "")
+            lines = b.splitlines()
+            for idx, line in enumerate(lines):
+                l_str = line.strip()
+                if "**architectural decision:**" in l_str.lower():
+                    dec = l_str.split(":", 1)[-1].strip()
+                    if not dec and idx + 1 < len(lines):
+                        dec = lines[idx + 1].strip()
+                    if dec and dec not in architectural_decisions:
+                        architectural_decisions.append(dec)
+
+                if re.match(r"^\d+\.\s+\*\*", l_str) and "?" in l_str:
+                    if l_str not in open_questions:
+                        open_questions.append(l_str)
+
+                if l_str.startswith("#### **Step") or l_str.startswith("#### **1.") or l_str.startswith("#### **2.") or l_str.startswith("#### **3."):
+                    step_title = l_str.replace("####", "").strip("* ")
+                    if step_title not in roadmap_items:
+                        roadmap_items.append(step_title)
+
+                if "**execution status:**" in l_str.lower():
+                    stat = l_str.split(":", 1)[-1].strip()
+                    if stat:
+                        execution_status = stat
+
+        latest_body = adrastea_comments[-1].get("body", "").strip()
+
+        parts = [
+            "### [Adrastea Autonomous State & Feedback Summary]",
+            f"**Execution Status:** {execution_status}",
+            "",
+        ]
+
+        if user_comment:
+            u_body = user_comment.get("body", "").strip()
+            u_preview = u_body.splitlines()[0][:100] if u_body else "Operator instruction"
+            parts.extend([
+                f"> 💬 *In response to @{AUTHORIZED_OPERATOR}: \"{u_preview}\"*",
+                "",
+            ])
+
+        if architectural_decisions:
+            parts.append("#### 🏛️ Architectural Strategy & Decisions")
+            for dec in architectural_decisions[-2:]:
+                parts.append(f"- {dec}")
+            parts.append("")
+
+        if roadmap_items:
+            parts.append("#### 📋 Active Roadmap & Milestones")
+            for step in roadmap_items[-4:]:
+                parts.append(f"- [x] {step}")
+            parts.append("")
+
+        if open_questions:
+            parts.append(f"#### ❓ Key Open Questions for Luke (@{AUTHORIZED_OPERATOR})")
+            for q in open_questions[:4]:
+                parts.append(f"- {q}")
+            parts.append("")
+        else:
+            parts.extend([
+                f"#### ❓ Operator Steering",
+                f"Adrastea is actively monitoring this thread. Reply with guidance or priorities to steer execution.",
+                "",
+            ])
+
+        if "### 3-Step Implementation Roadmap" in latest_body:
+            rm_match = re.search(r"(### 3-Step Implementation Roadmap.*?)(?=---\n\*\*Next|\Z)", latest_body, re.DOTALL)
+            if rm_match:
+                parts.extend([
+                    rm_match.group(1).strip(),
+                    "",
+                ])
+
+        import datetime
+        now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        parts.extend([
+            "---",
+            f"*Consolidated and maintained in-place autonomously by Adrastea. Last updated: {now_str}*",
+        ])
+
+        return "\n".join(parts)
 
     def is_waiting_for_user_response(
         self,
         issue_number: int,
-        issue_data: Optional[Dict[str, Any]] = None
+        issue_data: Optional[Dict[str, Any]] = None,
+        repo: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """Strict Anti-Spam Enforcement with Escalating Backoff:
         Checks whether this issue already has a pending autonomous update awaiting Luke's reply.
         Returns (True, reason) if we must wait and NOT post again.
         Returns (False, reason) if it's safe to post (e.g. user replied, or days elapsed).
         """
+        target_repo = repo or self.repo
         if issue_data is None:
-            comments = self.get_issue_comments(issue_number)
+            comments = self.get_paginated_issue_comments(issue_number, repo=target_repo)
         else:
             comments = issue_data.get("comments", [])
 
@@ -763,7 +1009,8 @@ class IssueCorrespondenceManager:
             return False, "No comments yet; safe to post initial update."
 
         latest_comment = comments[-1]
-        author = latest_comment.get("author", {}).get("login", "").lower()
+        author_obj = latest_comment.get("author") or latest_comment.get("user") or {}
+        author = author_obj.get("login", "").lower() if isinstance(author_obj, dict) else str(author_obj).lower()
         body = latest_comment.get("body", "")
 
         if is_adrastea_content(body, author):
@@ -781,21 +1028,75 @@ class IssueCorrespondenceManager:
         response_markdown: str,
         force: bool = False,
         repo: Optional[str] = None,
+        comments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """Posts a response comment back to a specific issue thread, adhering strictly to anti-spam."""
+        """Posts or updates a response comment on a specific issue thread.
+        Maintains STRICTLY A SINGLE REPLY per conversation turn:
+        - If an Adrastea reply comment already exists in the current turn: EDITS it in-place and summarizes feedback.
+        - Only creates a NEW comment when @holman57 has posted a new comment or a new turn begins.
+        - Cleans up any extraneous noise comments in that turn.
+        """
         target_repo = repo or self.repo
         if not force:
-            waiting, reason = self.is_waiting_for_user_response(issue_number)
+            waiting, reason = self.is_waiting_for_user_response(issue_number, repo=target_repo)
             if waiting:
                 logger.info(f"Suppressed duplicate post to issue #{issue_number} on {target_repo}: {reason}")
                 return {"success": False, "suppressed": True, "issue_number": issue_number, "details": reason}
 
-        # Ensure autonomous update header is present for reliable state detection
+        if comments is None:
+            comments = self.get_paginated_issue_comments(issue_number, repo=target_repo)
+        turns = self.get_conversation_turns(comments)
+        current_turn = turns[-1] if turns else {"user_comment": None, "adrastea_comments": []}
+        adrastea_comments = current_turn.get("adrastea_comments", [])
+
+        # Ensure autonomous update header is present
         if not response_markdown.startswith("### [Adrastea"):
-            body = f"### [Adrastea Autonomous Update]\n\n{response_markdown}"
+            body = f"### [Adrastea Autonomous Status & Response]\n\n{response_markdown}"
         else:
             body = response_markdown
 
+        import datetime
+        now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        if "*Last updated autonomously by Adrastea:" not in body:
+            body = f"{body.rstrip()}\n\n---\n*Last updated autonomously by Adrastea: {now_str}*"
+
+        # Case 1: An Adrastea comment already exists in the current turn -> EDIT IT IN-PLACE!
+        if adrastea_comments:
+            primary_comment = adrastea_comments[0]
+            comment_id = primary_comment.get("id")
+            logger.info(f"In-place editing existing Adrastea comment #{comment_id} on {target_repo} #{issue_number}")
+
+            # Clean up any extraneous noise comments in this turn
+            for extra in adrastea_comments[1:]:
+                extra_id = extra.get("id")
+                if extra_id:
+                    self.delete_issue_comment(extra_id, repo=target_repo)
+
+            edit_ok = self.edit_issue_comment(comment_id, body, repo=target_repo)
+            if edit_ok:
+                self.record_adrastea_inquiry(issue_number)
+                return {
+                    "success": True,
+                    "action": "edited",
+                    "comment_id": comment_id,
+                    "issue_number": issue_number,
+                    "details": f"Updated existing comment #{comment_id} in-place on {target_repo} #{issue_number}",
+                }
+            else:
+                logger.error(
+                    f"Failed to edit Adrastea comment #{comment_id} in-place on {target_repo} #{issue_number}. "
+                    f"Suppressed fallback creation to strictly enforce single-reply in-place policy."
+                )
+                return {
+                    "success": False,
+                    "action": "edit_failed",
+                    "comment_id": comment_id,
+                    "issue_number": issue_number,
+                    "details": f"Edit failed for comment #{comment_id}; creation suppressed to prevent duplicate noise.",
+                }
+
+        # Case 2: No Adrastea comment in current turn (e.g. Luke just commented, or new issue) -> CREATE NEW!
+        logger.info(f"Creating new single reply comment on {target_repo} #{issue_number}")
         try:
             res = subprocess.run(
                 ["gh", "issue", "comment", str(issue_number), "--repo", target_repo, "--body", body],
@@ -803,24 +1104,77 @@ class IssueCorrespondenceManager:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=15,
+                timeout=20,
             )
             if res.returncode == 0:
                 comment_url = res.stdout.strip()
-                logger.info(f"Dispatched response to Issue #{issue_number} on {target_repo}: {comment_url}")
+                logger.info(f"Dispatched new reply to Issue #{issue_number} on {target_repo}: {comment_url}")
                 self.record_adrastea_inquiry(issue_number)
                 return {
                     "success": True,
+                    "action": "created",
                     "issue_number": issue_number,
                     "details": f"Delivered to Issue #{issue_number} on {target_repo} ({comment_url})",
                 }
             return {
                 "success": False,
+                "action": "error",
                 "issue_number": issue_number,
                 "details": res.stderr.strip() or "gh CLI non-zero exit",
             }
         except Exception as e:
-            return {"success": False, "issue_number": issue_number, "details": str(e)}
+            return {"success": False, "action": "error", "issue_number": issue_number, "details": str(e)}
+
+    def summarize_and_consolidate_issue_comments(
+        self,
+        issue_number: int,
+        repo: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Summarizes all feedback and state from Adrastea comments in each turn,
+        updates the single immediate reply comment with the state and questions,
+        and deletes all redundant comment noise from the thread.
+        Never touches comments from @holman57.
+        """
+        target_repo = repo or self.repo
+        comments = self.get_paginated_issue_comments(issue_number, repo=target_repo)
+        if not comments:
+            return {"success": True, "repo": target_repo, "issue_number": issue_number, "deleted": 0, "edited": 0}
+
+        turns = self.get_conversation_turns(comments)
+        total_deleted = 0
+        total_edited = 0
+
+        for turn in turns:
+            adr_comments = turn.get("adrastea_comments", [])
+            if not adr_comments:
+                continue
+
+            primary = adr_comments[0]
+            extras = adr_comments[1:]
+            primary_id = primary.get("id")
+
+            # Synthesize all Adrastea feedback across this turn
+            summary_body = self._synthesize_adrastea_comments(adr_comments, turn.get("user_comment"))
+
+            # Edit primary comment with unified summary
+            if self.edit_issue_comment(primary_id, summary_body, repo=target_repo):
+                total_edited += 1
+
+            # Delete all extra redundant comments in this turn
+            for extra in extras:
+                extra_id = extra.get("id")
+                if extra_id and self.delete_issue_comment(extra_id, repo=target_repo):
+                    total_deleted += 1
+
+        return {
+            "success": True,
+            "repo": target_repo,
+            "issue_number": issue_number,
+            "total_comments_before": len(comments),
+            "edited": total_edited,
+            "deleted": total_deleted,
+            "remaining_comments": len(comments) - total_deleted,
+        }
 
     def post_goal_update(self, goal_id: str, update_markdown: str, force: bool = False) -> Dict[str, Any]:
         """Post an update specifically to a goal's dedicated issue."""
@@ -837,7 +1191,6 @@ class IssueCorrespondenceManager:
     ) -> Dict[str, Any]:
         """Backward compatible helper for notifications routing."""
         if is_pulse_status:
-            # System pulse thread is deprecated/closed; suppress general pulses to avoid static
             logger.info("System pulse outreach skipped: Issue #1 closed to prevent spam.")
             return {"success": False, "suppressed": True, "details": "Pulse thread closed."}
 
@@ -854,6 +1207,92 @@ class IssueCorrespondenceManager:
                     "details": f"Created dedicated topic issue #{new_issue_num}: '{topic_title}'",
                 }
             return {"success": False, "details": f"Failed to create new topic issue for '{topic_title}'"}
+
+
+def cleanup_all_repos_comment_noise() -> Dict[str, Any]:
+    """1. Permanently deletes [Growth Strategy] issues from companion repos outside Adrastea.
+    2. Summarizes all Adrastea feedback into single immediate reply comments and deletes
+       all comment noise across Adrastea and all target companion repositories.
+    """
+    results: Dict[str, Any] = {
+        "deleted_issues": [],
+        "consolidated_issues": [],
+        "total_comments_deleted": 0,
+        "total_comments_edited": 0,
+    }
+
+    target_repos = [
+        "Adrastea",
+        "hardcode",
+        "speech-flow",
+        "market-research",
+        "interpretive-interface",
+        "distributed-content-management",
+    ]
+
+    # Part 1: Delete [Growth Strategy] issues on companion repos outside Adrastea
+    companion_repos = [r for r in target_repos if r != "Adrastea"]
+    for cr in companion_repos:
+        full_repo = f"holman57/{cr}"
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "list", "--repo", full_repo, "--state", "all", "--json", "number,title"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=20,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                issues = json.loads(res.stdout)
+                for iss in issues:
+                    title = iss.get("title", "")
+                    num = iss.get("number")
+                    if "[growth strategy]" in title.lower() or "accelerating holman57 profile" in title.lower():
+                        logger.info(f"Deleting Growth Strategy issue #{num} from companion repo {full_repo}...")
+                        del_res = subprocess.run(
+                            ["gh", "issue", "delete", str(num), "--repo", full_repo, "--yes"],
+                            capture_output=True,
+                            text=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            timeout=20,
+                        )
+                        if del_res.returncode == 0:
+                            results["deleted_issues"].append({"repo": full_repo, "issue_number": num, "title": title})
+                            logger.info(f"Successfully deleted issue #{num} from {full_repo}")
+                        else:
+                            logger.warning(f"Failed to delete issue #{num} from {full_repo}: {del_res.stderr.strip()}")
+        except Exception as e:
+            logger.error(f"Error scanning/deleting growth issues on {full_repo}: {e}")
+
+    # Part 2: Consolidate comments on all open issues across all 6 target repos
+    for repo_name in target_repos:
+        full_repo = f"holman57/{repo_name}"
+        mgr = IssueCorrespondenceManager(repo=full_repo)
+        try:
+            res = subprocess.run(
+                ["gh", "issue", "list", "--repo", full_repo, "--state", "open", "--json", "number,title"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=20,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                open_issues = json.loads(res.stdout)
+                for iss in open_issues:
+                    num = iss["number"]
+                    title = iss.get("title", "")
+                    logger.info(f"Consolidating comments for {full_repo} #{num} ({title})...")
+                    c_res = mgr.summarize_and_consolidate_issue_comments(num, repo=full_repo)
+                    results["consolidated_issues"].append(c_res)
+                    results["total_comments_deleted"] += c_res.get("deleted", 0)
+                    results["total_comments_edited"] += c_res.get("edited", 0)
+        except Exception as e:
+            logger.error(f"Error consolidating comments on {full_repo}: {e}")
+
+    return results
 
 
 # Alias for backward compatibility
